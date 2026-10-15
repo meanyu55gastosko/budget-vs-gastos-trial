@@ -1,0 +1,20 @@
+name: gastos_ko
+description: Gastos Ko - Seafarer Budget Tracker
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  fl_chart: ^0.68.0
+  intl: ^0.19.0
+  shared_preferences: ^2.3.2
+  url_launcher: ^6.2.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon.png
