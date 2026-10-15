@@ -1,0 +1,44 @@
+workflows:
+  budget-vs-gastos-apk:
+    name: Gastos Ko APK
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    environment:
+      flutter: 3.32.8
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Restore App + Set Name + Icon
+        script: |
+          echo "=== RESTORE YOUR BUDGET CODE ==="
+          git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
+          git checkout c5f9933 -- lib/ || true
+          ls -lh assets/icon.png
+          cat lib/main.dart | head -10
+          echo "=== KEEP FRESH ANDROID FROM FLUTTER 3.32.8 (AGP 8.7.3) ==="
+          rm -rf android
+          flutter create --platforms=android --org com.gastosko.app --project-name budget_vs_gastosv1 .
+          git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
+          git checkout c5f9933 -- lib/ || true
+          echo "=== SET APP NAME TO Gastos Ko ==="
+          sed -i '' 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || sed -i 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml
+          grep label android/app/src/main/AndroidManifest.xml
+          echo "=== GENERATE ICON ==="
+          cat > flutter_launcher_icons.yaml <<'EOF'
+          flutter_icons:
+            android: true
+            ios: false
+            image_path: "assets/icon.png"
+            min_sdk_android: 21
+          EOF
+          flutter pub add flutter_launcher_icons --dev 2>/dev/null || true
+          flutter pub get
+          dart run flutter_launcher_icons || true
+          ls android/app/src/main/res/mipmap-hdpi/ic_launcher.png && echo "ICON OK!"
+      - name: Build Protected APK
+        script: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
