@@ -15,18 +15,19 @@ workflows:
           git checkout c5f9933 -- lib/ || true
           ls -lh assets/icon.png
           cat lib/main.dart | head -10
+
           echo "=== KEEP FRESH ANDROID FROM FLUTTER 3.32.8 (AGP 8.7.3) ==="
           rm -rf android
           flutter create --platforms=android --org com.gastosko.app --project-name budget_vs_gastosv1 .
           git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
           git checkout c5f9933 -- lib/ || true
+
           echo "=== SET APP NAME TO Gastos Ko ==="
           sed -i '' 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || sed -i 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml
-          grep label android/app/src/main/AndroidManifest.xml
-          
-          echo "=== INJECT QUERIES FOR URL LAUNCHER TO MANIFEST ==="
-          cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://android.com">
+
+          echo "=== INJECT QUERIES FOR URL LAUNCHER SAFELY ==="
+          # Gagawa tayo ng pansamantalang query block file
+          cat > queries_block.txt <<'EOF'
               <queries>
                   <intent>
                       <action android:name="android.intent.action.PROCESS_TEXT"/>
@@ -42,34 +43,15 @@ workflows:
                       <data android:scheme="mailto" />
                   </intent>
               </queries>
-              <application
-                  android:label="Gastos Ko"
-                  android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:launchMode="singleTop"
-                      android:taskAffinity=""
-                      android:theme="@style/LaunchTheme"
-                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-                      android:hardwareAccelerated="true"
-                      android:windowSoftInputMode="adjustResize">
-                      <meta-data
-                        android:name="io.flutter.embedding.android.NormalTheme"
-                        android:resource="@style/NormalTheme"
-                        />
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-                  <meta-data
-                      android:name="flutterEmbedding"
-                      android:value="2" />
-              </application>
-          </manifest>
           EOF
+
+          # Gagamit ng awk para isingit ang queries_block.txt sa unahan ng <application tag nang hindi nasisira ang manifest structure
+          awk 'NR==FNR{a=a $0 "\n";next} /<application/{print a} 1' queries_block.txt android/app/src/main/AndroidManifest.xml > temp_manifest.xml
+          mv temp_manifest.xml android/app/src/main/AndroidManifest.xml
+          rm queries_block.txt
+          
+          echo "=== CHECKING INJECTED MANIFEST ==="
+          cat android/app/src/main/AndroidManifest.xml | head -25
 
           echo "=== GENERATE ICON ==="
           cat > flutter_launcher_icons.yaml <<'EOF'
