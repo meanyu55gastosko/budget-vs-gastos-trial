@@ -590,30 +590,52 @@ class HomeScreenState extends State {
       return;
     }
     try {
-      List<List> csvRows = [
-        ['ID', 'Kategorya / Pamagat', 'Halaga (₱)', 'Petsa at Oras']
+      // Kuhanin ang active wallet name at budget para maisama sa report
+      String activeWalletName = "Main Wallet";
+      double activeWalletBudget = budget;
+      for (var w in wallets) {
+        if (w.id == activeWalletId) {
+          activeWalletName = w.name;
+          activeWalletBudget = w.budget;
+          break;
+        }
+      }
+
+      // Nagdagdag ng Wallet at Budget columns para malinaw ang pondo sa ulat
+      List<List<dynamic>> csvRows = [
+        [
+          'Wallet Name',
+          'Current Budget (₱)',
+          'Expense ID',
+          'Kategorya / Pamagat',
+          'Halaga (₱)',
+          'Petsa at Oras'
+        ]
       ];
+
       for (var expense in all) {
         csvRows.add([
+          activeWalletName,
+          activeWalletBudget,
           expense.id,
           expense.title,
           expense.amount,
           DateFormat('yyyy-MM-dd hh:mm a').format(expense.date),
         ]);
       }
-      String csvData = const ListToCsvConverter().convert(csvRows);
+
+      // Gumamit ng explicit UTF-8 prepend (\uFEFF) para maiwasan ang mga 'Halaga (â,±)' encoding artifacts sa Excel
+      String csvData = '\uFEFF' + const ListToCsvConverter().convert(csvRows);
+
       final directory = await getTemporaryDirectory();
-      String activeWalletName = "Main Wallet";
-      for (var w in wallets) {
-        if (w.id == activeWalletId) {
-          activeWalletName = w.name.replaceAll(RegExp(r'[^\w\s]+'), '');
-          break;
-        }
-      }
+      String cleanFileName =
+          activeWalletName.replaceAll(RegExp(r'[^\w\s]+'), '');
+
       final String filePath =
-          '${directory.path}/GastosKo_${activeWalletName}_Export.csv';
+          '${directory.path}/GastosKo_${cleanFileName}_Export.csv';
       final File file = File(filePath);
-      await file.writeAsString(csvData);
+      await file.writeAsString(csvData, encoding: utf8);
+
       final XFile xFile = XFile(filePath);
       await Share.shareXFiles([xFile],
           text: 'Narito ang aking export file galing sa Gastos Ko App!');
@@ -824,13 +846,25 @@ class HomeScreenState extends State {
         'subject': subjectText,
       }),
     );
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
-    } else {
-      if (mounted) {
+
+    try {
+      // Gagamit ng externalNonBrowserApplication para piliting native email app picker ang lumabas sa CP ng user
+      bool launched = await launchUrl(
+        emailUri,
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+
+      if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Hindi mabuksan ang email client boss.')),
+              content:
+                  Text('Walang nahanap na email app o hindi mabuksan boss.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('May error sa pagbubukas ng email app: $e')),
         );
       }
     }
