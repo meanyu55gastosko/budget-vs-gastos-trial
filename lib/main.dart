@@ -1050,7 +1050,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ang iyong bagong wallet "$name" ay nagawa na, at may budget na ${peso(budgetAmt)}.',
+              'Ang iyong bagong wallet "$name" ay nagawa na at may budget na ${peso(budgetAmt)}.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
@@ -1063,7 +1063,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20)),
               ),
-              child: const Text('PROCEED',
+              child: const Text('OKAY',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             )
           ],
@@ -1224,7 +1224,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               setModalState(() {});
               Navigator.pop(context);
             },
-            child: const Text('I-DELETE FOREVER',
+            child: const Text('I-DELETE',
                 style: TextStyle(
                     color: Colors.redAccent, fontWeight: FontWeight.bold)),
           )
@@ -1246,7 +1246,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 children: [
                   Icon(Icons.account_balance_wallet, color: Color(0xFFFFD700)),
                   SizedBox(width: 8),
-                  Text('WALLETS MO', style: TextStyle(fontSize: 16)),
+                  Text('WALLET MANAGER', style: TextStyle(fontSize: 16)),
                 ],
               ),
               IconButton(
@@ -1752,7 +1752,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                           color: Color(0xFFFFD700), size: 26),
                       SizedBox(width: 8),
                       Text(
-                        'CHOOSE YOUR PRO PLAN',
+                        'PUMILI NG PRO PLAN',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1770,7 +1770,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 20),
                   _buildPlanTile(
-                    title: 'Monthly Subscription',
+                    title: 'Monthly Plan',
                     price: '₱30 / month',
                     badgeText: 'Base Plan',
                     badgeColor: Colors.white24,
@@ -1791,7 +1791,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     },
                   ),
                   _buildPlanTile(
-                    title: 'Annual Subscription',
+                    title: 'Annual Plan',
                     price: '₱249 / 1 year',
                     badgeText: 'Best Value - Save 30%',
                     badgeColor: const Color(0xFF00E676),
@@ -2255,7 +2255,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 24),
                 if (chartData.isNotEmpty) ...[
-                  const Text('ANG IYONG GASTOS CHART',
+                  const Text('Gastos Biswal Chart',
                       style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -2281,7 +2281,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('HISTORY NG MGA GASTOS',
+                    const Text('History ng mga Ginastos',
                         style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
