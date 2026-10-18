@@ -4,14 +4,14 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io'; // Para sa File operations ng export
-import 'package:flutter/foundation.dart'; // Para mabasa ang kIsWeb platform utility
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:path_provider/path_provider.dart'; // Para sa temporary paths
-import 'package:csv/csv.dart'; // Para sa list conversions
-import 'package:share_plus/share_plus.dart'; // Para sa share overlay functions
+import 'package:path_provider/path_provider.dart';
+import 'package:csv/csv.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() => runApp(const GastosKoApp());
 
@@ -74,23 +74,9 @@ class _SplashState extends State<SplashScreen>
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
-    bool isPremium = prefs.getBool('is_premium_user') ?? false;
-    String? installDateStr = prefs.getString('install_date');
-    DateTime now = DateTime.now();
-
-    if (installDateStr == null) {
-      await prefs.setString('install_date', now.toIso8601String());
-    } else {
-      DateTime installDate = DateTime.parse(installDateStr);
-      if (now.difference(installDate).inDays >= 30 && !isPremium) {
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const TrialExpiredScreen()));
-        return;
-      }
-    }
-
     final savedPin = prefs.getString('user_pincode');
 
+    // Diretso na sa PIN verification nang walang 30-day block layer
     if (savedPin == null || savedPin.isEmpty) {
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const RegistrationScreen()));
@@ -154,74 +140,6 @@ class _SplashState extends State<SplashScreen>
   }
 }
 
-class TrialExpiredScreen extends StatelessWidget {
-  const TrialExpiredScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.timer_off_rounded,
-                    size: 90, color: Colors.redAccent),
-                const SizedBox(height: 24),
-                const Text(
-                  'TAPOS NA ANG FREE TRIAL MO',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Ang iyong 1-Month Free Trial ay nag-end na. Mangyaring mag-upgrade sa Full Version upang magpatuloy sa ligtas na pag-track ng iyong gastos.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 14, color: Colors.white70, height: 1.4),
-                ),
-                const SizedBox(height: 40),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final homeState =
-                        context.findAncestorStateOfType<HomeScreenState>();
-                    if (homeState != null) {
-                      homeState._showUpgradeOptionsBottomSheet();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'Mangyaring i-unlock muna ang app o gamitin ang menu.')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.star_rounded, color: Colors.black),
-                  label: const Text('UPGRADE TO PRO NOW',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFD700),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class RegistrationScreen extends StatelessWidget {
   const RegistrationScreen({super.key});
 
@@ -247,8 +165,7 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
   String _errorText = "";
   bool _isRecovering = false;
   bool _forceNewPin = false;
-  bool _isUpdatingPin =
-      false; // Flag para malaman kung galing sa recovery panel
+  bool _isUpdatingPin = false;
 
   int _failedAttempts = 0;
   final int _maxAttempts = 3;
@@ -282,7 +199,6 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
     final prefs = await SharedPreferences.getInstance();
 
     if (_isUpdatingPin) {
-      // KUNG GALING SA RECOVERY: Diretso save ng PIN, walang question setup, diretso HomeScreen
       await prefs.setString('user_pincode', pin);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -293,10 +209,8 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
             MaterialPageRoute(builder: (context) => const HomeScreen()));
       }
     } else if (widget.isRegistration || _forceNewPin) {
-// KUNG FIRST TIME REGISTRATION: May kasamang security question dialog setup
       _showSecurityQuestionSetupDialog(pin);
     } else {
-// LOCK SCREEN INTERFACE MODE
       if (pin == _savedPin) {
         setState(() {
           _failedAttempts = 0;
@@ -391,8 +305,7 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
     if (inputAnswer == savedAnswer && savedAnswer.isNotEmpty) {
       setState(() {
         _isRecovering = false;
-        _isUpdatingPin =
-            true; // I-activate ang flag para malaman ng handlePinSubmit
+        _isUpdatingPin = true;
         _titleText = "MAG-SET NG BAGONG PINCODE";
         _errorText = "";
         _pinController.clear();
@@ -696,7 +609,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   String searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
   int? selectedIndex;
-  int _daysLeft = 30;
   final NumberFormat commaFormat = NumberFormat('#,##0');
   String fmt(num n) => commaFormat.format(n.toInt());
   String peso(num n) => '₱${fmt(n)}';
@@ -711,53 +623,12 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   Map<String, Color> colorMap = {};
   Timer? _bgSessionTimer;
   final Duration _sessionTimeoutDuration = const Duration(minutes: 5);
-  void _showTrialExpiredBlockDialog(String actionName) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.lock_outline_rounded, color: Colors.redAccent),
-            SizedBox(width: 8),
-            Text('TAPOS NA ANG TRIAL!',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: Text(
-          'Hindi ka pwedeng $actionName habang expired ang iyong free trial. Mangyaring mag-upgrade sa PRO version.',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('I-KANSELA',
-                style: TextStyle(color: Colors.white38)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showUpgradeOptionsBottomSheet();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFFD700),
-              foregroundColor: Colors.black,
-            ),
-            child: const Text('UPGRADE TO PRO',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     loadData();
-    _calculateTrialDays();
+    _checkPremiumState();
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((Duration timestamp) {
         _initializeBilling();
@@ -766,7 +637,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       setState(() {
         _isPremiumUser = false;
       });
-      debugPrint("Web Emulator Detected: Testing standard basic trial states.");
     }
   }
 
@@ -775,7 +645,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       _bgSessionTimer?.cancel();
       _bgSessionTimer = Timer(_sessionTimeoutDuration, () {
-        debugPrint("Session expired sa background layer! Ilo-lock na ang app.");
         _lockAppSession();
       });
     } else if (state == AppLifecycleState.resumed) {
@@ -809,11 +678,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   Future _loadProductsFromGoogleConsole() async {
     if (kIsWeb) return;
     final bool isAvailable = await _inAppPurchase.isAvailable();
-    if (!isAvailable) {
-      debugPrint(
-          "In-app store context is not ready on this interface instance.");
-      return;
-    }
+    if (!isAvailable) return;
     final Set kIds = {
       'gastos_ko_monthly',
       'gastos_ko_semiannual',
@@ -829,10 +694,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   Future _exportWalletToCSV() async {
-    if (_daysLeft <= 0 && !_isPremiumUser) {
-      _showTrialExpiredBlockDialog("mag-export ng data");
-      return;
-    }
     if (all.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Walang mga gastos na maie-export!')),
@@ -859,7 +720,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           break;
         }
       }
-      List<List<dynamic>> csvRows = [
+      List<List> csvRows = [
         [
           'Wallet Name',
           'Current Budget (₱)',
@@ -956,19 +817,11 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Future _calculateTrialDays() async {
+  Future _checkPremiumState() async {
     final p = await SharedPreferences.getInstance();
     setState(() {
       _isPremiumUser = kIsWeb ? false : (p.getBool('is_premium_user') ?? false);
     });
-    String? installDateStr = p.getString('install_date');
-    if (installDateStr != null) {
-      DateTime installDate = DateTime.parse(installDateStr);
-      int daysPassed = DateTime.now().difference(installDate).inDays;
-      setState(() {
-        _daysLeft = math.max(0, 30 - daysPassed);
-      });
-    }
   }
 
   Future loadData() async {
@@ -1245,7 +1098,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               const Row(
                 children: [
                   Icon(Icons.account_balance_wallet, color: Color(0xFFFFD700)),
-                  SizedBox(width: 8),
+                  SExpandingLabel(width: 8),
                   Text('WALLET MANAGER', style: TextStyle(fontSize: 16)),
                 ],
               ),
@@ -1327,11 +1180,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      if (_daysLeft <= 0 && !_isPremiumUser) {
-                        _showTrialExpiredBlockDialog("gumawa ng bagong wallet");
-                      } else {
-                        _showAddWalletDialog();
-                      }
+                      _showAddWalletDialog();
                     },
                     icon: const Icon(Icons.add_card, size: 18),
                     label: const Text('MAGDAGDAG'),
@@ -1964,8 +1813,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     List filteredExpenses = all.where((item) {
       return item.title.toLowerCase().contains(searchQuery.toLowerCase());
     }).toList();
-    String currentTrialStatusLabel =
-        _daysLeft == 1 ? "1 day left" : "$_daysLeft days left";
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -1987,31 +1834,21 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               spacing: 5,
               runSpacing: 2,
               children: [
-                Text(_isPremiumUser ? 'Premium Active' : 'Free Trial Version',
+                Text(_isPremiumUser ? 'Premium Active' : 'Free Full Version',
                     style: const TextStyle(
                         color: Colors.white38,
                         fontSize: 10,
                         fontWeight: FontWeight.normal,
                         letterSpacing: 0.3)),
-                Icon(
+                const Icon(
                   Icons.fiber_manual_record,
                   size: 6,
-                  color: _isPremiumUser
-                      ? const Color(0xFF00E676)
-                      : (_daysLeft <= 5
-                          ? Colors.redAccent
-                          : const Color(0xFFFFD700)),
+                  color: Color(0xFF00E676),
                 ),
-                Text(
-                  _isPremiumUser
-                      ? 'Lifetime / Active'
-                      : currentTrialStatusLabel,
+                const Text(
+                  'Lifetime / Active',
                   style: TextStyle(
-                      color: _isPremiumUser
-                          ? const Color(0xFF00E676)
-                          : (_daysLeft <= 5
-                              ? Colors.redAccent
-                              : const Color(0xFFFFD700)),
+                      color: Color(0xFF00E676),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.3),
@@ -2067,7 +1904,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                           Text(
                               _isPremiumUser
                                   ? 'Premium Active'
-                                  : 'Free Trial ($currentTrialStatusLabel)',
+                                  : 'Free Full Version (Active)',
                               style: const TextStyle(
                                   color: Colors.white38, fontSize: 10)),
                         ],
@@ -2102,8 +1939,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     style: TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
-                  _launchComplianceUrl(
-                      'docs.google.com/document/d/e/2PACX-1vTjonFfWFs9UiUqNne5Ro0c2ab2UhR1mnwe0E1BBl68qrK5gdaqWc9STAAvTAapBSve_7AuS8-rNNpx/pub');
+                  _launchComplianceUrl('google.com');
                 },
               ),
               ListTile(
@@ -2113,8 +1949,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     style: TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
-                  _launchComplianceUrl(
-                      'docs.google.com/document/d/e/2PACX-1vS4ekakFeVHrKq98abpasJFDV9tdEQGFWf9USDoSOADmlY859l75tURqA5qPrcbFwEKfMPb-Bg-hLpL/pub');
+                  _launchComplianceUrl('google.com');
                 },
               ),
               ExpansionTile(
@@ -2476,4 +2311,12 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       }),
     );
   }
+}
+
+// Helper utility para sa design structure ng list layout spacing
+class SExpandingLabel extends StatelessWidget {
+  final double width;
+  const SExpandingLabel({super.key, required this.width});
+  @override
+  Widget build(BuildContext context) => SizedBox(width: width);
 }
