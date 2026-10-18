@@ -1,12 +1,66 @@
 workflows:
-  budget-vs-gastos-apk:
-    name: Gastos Ko APK
+  budget-vs-gastos-aab:
+    name: Gastos Ko Pro AAB Compliance
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
       flutter: 3.32.8
       xcode: latest
       cocoapods: default
+      # Dito natin ilalagay ang iyong secret production environment credentials boss
+      vars:
+        PACKAGE_NAME: "com.rasmobilelabs.gastosko"
+        KEY_ALIAS: "upload"
+        STORE_PASSWORD: "bossrod123"
+        KEY_PASSWORD: "bossrod123"
+        # ⚠️ IPERFECTLY PASTE MO DITO BOSS YUNG COPIED TEXT GALING SA base64_key.txt MO
+        BASE64_KEYSTORE: "-----BEGIN CERTIFICATE-----
+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
+-----END CERTIFICATE-----
+"
     scripts:
       - name: Restore App + Set Name + Icon
         script: |
@@ -18,7 +72,7 @@ workflows:
 
           echo "=== KEEP FRESH ANDROID FROM FLUTTER 3.32.8 (AGP 8.7.3) ==="
           rm -rf android
-          flutter create --platforms=android --org com.gastosko.app --project-name budget_vs_gastosv1 .
+          flutter create --platforms=android --org com.rasmobilelabs --project-name gastosko .
           git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
           git checkout c5f9933 -- lib/ || true
 
@@ -26,7 +80,6 @@ workflows:
           sed -i '' 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || sed -i 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml
 
           echo "=== INJECT QUERIES FOR URL LAUNCHER SAFELY ==="
-          # Gagawa tayo ng pansamantalang query block file
           cat > queries_block.txt <<'EOF'
               <queries>
                   <intent>
@@ -45,7 +98,6 @@ workflows:
               </queries>
           EOF
 
-          # Gagamit ng awk para isingit ang queries_block.txt sa unahan ng <application tag nang hindi nasisira ang manifest structure
           awk 'NR==FNR{a=a $0 "\n";next} /<application/{print a} 1' queries_block.txt android/app/src/main/AndroidManifest.xml > temp_manifest.xml
           mv temp_manifest.xml android/app/src/main/AndroidManifest.xml
           rm queries_block.txt
@@ -65,10 +117,87 @@ workflows:
           flutter pub get
           dart run flutter_launcher_icons || true
           ls android/app/src/main/res/mipmap-hdpi/ic_launcher.png && echo "ICON OK!"
-      - name: Build Protected APK
+
+      - name: Inject Secure Keystore and Signing Files
+        script: |
+          echo "=== RECONSTRUCT PHYSICAL KEYSTORE FROM BASE64 ==="
+          echo "$BASE64_KEYSTORE" | base64 --decode > android/app/upload-keystore.jks
+
+          echo "=== AUTO GENERATE CONFIGURATION SIGNING FIELDS ==="
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=app/upload-keystore.jks
+          EOF
+
+          echo "=== INJECT KOTLIN DSL PRODUCTION SIGNING IN BUILD.GRADLE.KTS ==="
+          cat > android/app/build.gradle.kts <<'EOF'
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          plugins {
+              id("com.android.application")
+              id("kotlin-android")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              namespace = "com.rasmobilelabs.gastosko"
+              compileSdk = flutter.compileSdkVersion
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_11
+                  targetCompatibility = JavaVersion.VERSION_11
+              }
+
+              kotlinOptions {
+                  jvmTarget = JavaVersion.VERSION_11.toString()
+              }
+
+              defaultConfig {
+                  applicationId = "com.rasmobilelabs.gastosko"
+                  minSdk = flutter.minSdkVersion
+                  targetSdk = flutter.targetSdkVersion
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties.getProperty("keyAlias")
+                      keyPassword = keystoreProperties.getProperty("keyPassword")
+                      storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+                      storePassword = keystoreProperties.getProperty("storePassword")
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
+
+      - name: Build Protected AAB for Google Console Compliance
         script: |
           flutter clean
           flutter pub get
-          flutter build apk --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+          # Binago na mula sa apk patungong appbundle para pumasa sa Google Play Store upload format
+          flutter build appbundle --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+      - symbols/*.symbols
