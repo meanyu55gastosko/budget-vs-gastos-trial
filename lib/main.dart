@@ -74,9 +74,26 @@ class _SplashState extends State<SplashScreen>
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
+
+    // FREE 30-DAYS TRIAL INITIALIZATION
+    String? installDateStr = prefs.getString('app_install_date');
+    DateTime now = DateTime.now();
+    bool isExpired = false;
+
+    if (installDateStr == null) {
+      await prefs.setString('app_install_date', now.toIso8601String());
+    } else {
+      DateTime installDate = DateTime.parse(installDateStr);
+      int daysUsed = now.difference(installDate).inDays;
+      bool isPremium = prefs.getBool('is_premium_user') ?? false;
+
+      if (daysUsed >= 30 && !isPremium) {
+        isExpired = true;
+      }
+    }
+
     final savedPin = prefs.getString('user_pincode');
 
-    // Diretso na sa PIN verification nang walang 30-day block layer
     if (savedPin == null || savedPin.isEmpty) {
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const RegistrationScreen()));
@@ -84,8 +101,11 @@ class _SplashState extends State<SplashScreen>
       Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (context) =>
-                  const PinCodeScreen(isRegistration: false)));
+              builder: (context) => PinCodeScreen(
+                    isRegistration: false,
+                    isTrialExpiredMode:
+                        isExpired, // Ipasa kung expired na ang trial
+                  )));
     }
   }
 
@@ -151,7 +171,12 @@ class RegistrationScreen extends StatelessWidget {
 
 class PinCodeScreen extends StatefulWidget {
   final bool isRegistration;
-  const PinCodeScreen({super.key, required this.isRegistration});
+  final bool isTrialExpiredMode; // Flag kung expired na ang trial ng user
+  const PinCodeScreen({
+    super.key,
+    required this.isRegistration,
+    this.isTrialExpiredMode = false,
+  });
 
   @override
   State<PinCodeScreen> createState() => _PinCodeScreenState();
@@ -161,54 +186,114 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
   final TextEditingController _pinController = TextEditingController();
   final TextEditingController _answerController = TextEditingController();
   String _savedPin = "";
-  String _titleText = "";
   String _errorText = "";
   bool _isRecovering = false;
-  bool _forceNewPin = false;
   bool _isUpdatingPin = false;
+  String _currentLocale = "tl";
 
   int _failedAttempts = 0;
   final int _maxAttempts = 3;
 
+  final Map<String, Map<String, String>> _pinLocalization = {
+    'en': {
+      'set_pin': 'SET YOUR PINCODE',
+      'enter_pin': 'ENTER YOUR PINCODE',
+      'trial_expired_title': '🔒 TRIAL EXPIRED LOCK',
+      'trial_expired_info':
+          'Your 30-day free trial has expired. Enter PIN to view limited historical data.',
+      'pin_len_err': 'PIN code must be 4 digits.',
+      'pin_success': 'Your PIN has been successfully updated!',
+      'security_title': '🔒 SECURITY QUESTION',
+      'security_question': 'What is the name of your first Pet?',
+      'security_hint': 'Your answer here...',
+      'setup_success': 'PIN and Security Recovery successfully set!',
+      'btn_save': 'SAVE',
+      'recover_title': 'RECOVER PIN CODE',
+      'max_attempts': '🔒 Attempts exhausted! Here is the recovery layer.',
+      'wrong_pin': 'Wrong PIN Code! ({left}/{max} attempts left)',
+      'recovery_instruction':
+          'Answer the question below:\nWhat is the name of your first Pet?',
+      'reg_info':
+          'You will use this PIN every time you open the app for your security.',
+      'lock_info': 'Enter your 4-digit code to unlock.',
+      'type_ans': 'Type your answer...',
+      'correct_ans': 'Correct answer! Please set a new PIN.',
+      'wrong_ans': 'Wrong answer! Think carefully.',
+      'btn_verify': 'VERIFY ANSWER',
+      'btn_confirm': 'CONFIRM & SAVE',
+      'btn_unlock': 'UNLOCK',
+      'forgot_pin': 'Forgot PIN Code?',
+      'back_lock': 'Back to Lock Screen',
+    },
+    'tl': {
+      'set_pin': 'MAG-SET NG IYONG PINCODE',
+      'enter_pin': 'I-ENTER ANG IYONG PINCODE',
+      'trial_expired_title': '🔒 EXPIRATION LOCK SCREEN',
+      'trial_expired_info':
+          'Tapos na ang iyong 30-day free trial. Ipasok ang PIN para mabuksan ang app sa limitadong mode.',
+      'pin_len_err': 'Dapat ay may 4-digits ang PIN code.',
+      'pin_success': 'Matagumpay na na-update ang iyong PIN!',
+      'security_title': '🔒 SECURITY QUESTION',
+      'security_question':
+          'Ano ang pangalan ng iyong unang naging Alagang Hayop (Pet)?',
+      'security_hint': 'Sagot mo dito...',
+      'setup_success':
+          'Matagumpay na nai-set ang iyong PIN at Security Recovery!',
+      'btn_save': 'I-SAVE',
+      'recover_title': 'IREKOBER ANG PIN CODE',
+      'max_attempts': '🔒 Naubos na ang attempts mo! Heto ang recovery layer.',
+      'wrong_pin': 'Maling PIN Code! ({left}/{max} attempts left)',
+      'recovery_instruction':
+          'Sagutin ang tanong sa ibaba:\nAno ang pangalan ng iyong unang naging Alagang Hayop (Pet)?',
+      'reg_info':
+          'Gagamitin mo ang PIN na ito tuwing bubuksan ang app para sa iyong seguridad.',
+      'lock_info': 'Ipasok ang iyong 4-digit code para mag-unlock.',
+      'type_ans': 'I-type ang iyong sagot...',
+      'correct_ans': 'Tama ang sagot mo! Mag-set ka na ng bagong PIN.',
+      'wrong_ans': 'Maling sagot! Isiping mabuti.',
+      'btn_verify': 'I-VERIFY ANG SAGOT',
+      'btn_confirm': 'I-CONFIRM AT I-SAVE',
+      'btn_unlock': 'I-UNLOCK',
+      'forgot_pin': 'Nakalimutan ang PIN Code?',
+      'back_lock': 'Bumalik sa Lock Screen',
+    }
+  };
+
+  String _getTxt(String key) => _pinLocalization[_currentLocale]?[key] ?? key;
+
   @override
   void initState() {
     super.initState();
-    _titleText = widget.isRegistration
-        ? "MAG-SET NG IYONG PINCODE"
-        : "I-ENTER ANG IYONG PINCODE";
-    if (!widget.isRegistration) {
-      _loadSavedPin();
-    }
+    _loadSavedPinAndLocale();
   }
 
-  Future<void> _loadSavedPin() async {
+  Future<void> _loadSavedPinAndLocale() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _savedPin = prefs.getString('user_pincode') ?? "";
+      _currentLocale = prefs.getString('app_lang_locale') ?? "tl";
     });
   }
 
   Future<void> _handlePinSubmit(String pin) async {
     if (pin.length < 4) {
       setState(() {
-        _errorText = "Dapat ay may 4-digits ang PIN code.";
+        _errorText = _getTxt('pin_len_err');
       });
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-
     if (_isUpdatingPin) {
+      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_pincode', pin);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Matagumpay na na-update ang iyong PIN!')),
+          SnackBar(content: Text(_getTxt('pin_success'))),
         );
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (context) => const HomeScreen()));
       }
-    } else if (widget.isRegistration || _forceNewPin) {
+    } else if (widget.isRegistration) {
       _showSecurityQuestionSetupDialog(pin);
     } else {
       if (pin == _savedPin) {
@@ -225,12 +310,12 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
           _pinController.clear();
           if (_failedAttempts >= _maxAttempts) {
             _isRecovering = true;
-            _errorText =
-                "🔒 Naubos na ang attempts mo! Heto ang recovery layer.";
+            _errorText = _getTxt('max_attempts');
           } else {
             int natitira = _maxAttempts - _failedAttempts;
-            _errorText =
-                "Maling PIN Code! ($natitira/$_maxAttempts attempts left)";
+            _errorText = _getTxt('wrong_pin')
+                .replaceAll('{left}', natitira.toString())
+                .replaceAll('{max}', _maxAttempts.toString());
           }
         });
       }
@@ -243,8 +328,8 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('🔒 SECURITY QUESTION',
-            style: TextStyle(
+        title: Text(_getTxt('security_title'),
+            style: const TextStyle(
                 fontSize: 16,
                 color: Color(0xFFFFD700),
                 fontWeight: FontWeight.bold)),
@@ -252,16 +337,15 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-                'Ano ang pangalan ng iyong unang naging Alagang Hayop (Pet)?',
-                style: TextStyle(fontSize: 13, color: Colors.white70)),
+            Text(_getTxt('security_question'),
+                style: const TextStyle(fontSize: 13, color: Colors.white70)),
             const SizedBox(height: 12),
             TextField(
               controller: _answerController,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                  hintText: 'Sagot mo dito...',
-                  hintStyle: TextStyle(color: Colors.white30)),
+              decoration: InputDecoration(
+                  hintText: _getTxt('security_hint'),
+                  hintStyle: const TextStyle(color: Colors.white30)),
             ),
           ],
         ),
@@ -276,9 +360,7 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Matagumpay na nai-set ang iyong PIN at Security Recovery!')),
+                    SnackBar(content: Text(_getTxt('setup_success'))),
                   );
                   Navigator.pushReplacement(
                       context,
@@ -290,8 +372,8 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFD700),
                 foregroundColor: Colors.black),
-            child: const Text('I-SAVE',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(_getTxt('btn_save'),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
           )
         ],
       ),
@@ -306,7 +388,6 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
       setState(() {
         _isRecovering = false;
         _isUpdatingPin = true;
-        _titleText = "MAG-SET NG BAGONG PINCODE";
         _errorText = "";
         _pinController.clear();
         _answerController.clear();
@@ -314,14 +395,14 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
       await prefs.remove('user_pincode');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Tama ang sagot mo! Mag-set ka na ng bagong PIN.'),
+          SnackBar(
+              content: Text(_getTxt('correct_ans')),
               backgroundColor: Colors.green),
         );
       }
     } else {
       setState(() {
-        _errorText = "Maling sagot! Isiping mabuti.";
+        _errorText = _getTxt('wrong_ans');
         _answerController.clear();
       });
     }
@@ -329,6 +410,11 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String currentTitle =
+        widget.isRegistration ? _getTxt('set_pin') : _getTxt('enter_pin');
+    if (widget.isTrialExpiredMode)
+      currentTitle = _getTxt('trial_expired_title');
+    if (_isUpdatingPin) currentTitle = _getTxt('set_pin');
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: SafeArea(
@@ -341,33 +427,37 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                 Icon(
                   _isRecovering
                       ? Icons.help_outline_rounded
-                      : ((widget.isRegistration ||
-                              _forceNewPin ||
-                              _isUpdatingPin)
-                          ? Icons.lock_open_rounded
-                          : Icons.lock_outline_rounded),
+                      : (widget.isTrialExpiredMode
+                          ? Icons.timer_off_outlined
+                          : ((widget.isRegistration || _isUpdatingPin)
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_outline_rounded)),
                   size: 80,
-                  color: const Color(0xFFFFD700),
+                  color: widget.isTrialExpiredMode
+                      ? Colors.redAccent
+                      : const Color(0xFFFFD700),
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  _isRecovering ? "PIN CODE RECOVERY" : _titleText,
+                  _isRecovering ? _getTxt('recover_title') : currentTitle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: widget.isTrialExpiredMode
+                          ? Colors.redAccent
+                          : Colors.white,
                       letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   _isRecovering
-                      ? "Sagutin ang tanong sa ibaba:\nAno ang pangalan ng iyong unang naging Alagang Hayop (Pet)?"
-                      : ((widget.isRegistration ||
-                              _forceNewPin ||
-                              _isUpdatingPin)
-                          ? "Gagamitin mo ang PIN na ito tuwing bubuksan ang app para sa iyong seguridad."
-                          : "Ipasok ang iyong 4-digit code para mag-unlock."),
+                      ? _getTxt('recovery_instruction')
+                      : (widget.isTrialExpiredMode
+                          ? _getTxt('trial_expired_info')
+                          : ((widget.isRegistration || _isUpdatingPin)
+                              ? _getTxt('reg_info')
+                              : _getTxt('lock_info'))),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 13, color: Colors.white54),
                 ),
@@ -381,19 +471,24 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                       obscureText: true,
                       textAlign: TextAlign.center,
                       maxLength: 4,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 28,
                           letterSpacing: 20,
-                          color: Color(0xFFFFD700)),
+                          color: widget.isTrialExpiredMode
+                              ? Colors.redAccent
+                              : const Color(0xFFFFD700)),
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         counterText: "",
-                        enabledBorder: UnderlineInputBorder(
+                        enabledBorder: const UnderlineInputBorder(
                             borderSide:
                                 BorderSide(color: Colors.white30, width: 2)),
                         focusedBorder: UnderlineInputBorder(
-                            borderSide:
-                                BorderSide(color: Color(0xFFFFD700), width: 2)),
+                            borderSide: BorderSide(
+                                color: widget.isTrialExpiredMode
+                                    ? Colors.redAccent
+                                    : const Color(0xFFFFD700),
+                                width: 2)),
                       ),
                       onChanged: (val) {
                         if (val.length == 4) {
@@ -410,14 +505,14 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                       textCapitalization: TextCapitalization.words,
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 18, color: Colors.white),
-                      decoration: const InputDecoration(
-                        hintText: "I-type ang iyong sagot...",
-                        hintStyle:
-                            TextStyle(color: Colors.white24, fontSize: 14),
-                        enabledBorder: UnderlineInputBorder(
+                      decoration: InputDecoration(
+                        hintText: _getTxt('type_ans'),
+                        hintStyle: const TextStyle(
+                            color: Colors.white24, fontSize: 14),
+                        enabledBorder: const UnderlineInputBorder(
                             borderSide:
                                 BorderSide(color: Colors.white30, width: 2)),
-                        focusedBorder: UnderlineInputBorder(
+                        focusedBorder: const UnderlineInputBorder(
                             borderSide:
                                 BorderSide(color: Color(0xFFFFD700), width: 2)),
                       ),
@@ -440,7 +535,9 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                       ? _handleRecoverySubmit()
                       : _handlePinSubmit(_pinController.text),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFD700),
+                    backgroundColor: widget.isTrialExpiredMode
+                        ? Colors.redAccent
+                        : const Color(0xFFFFD700),
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 40, vertical: 14),
@@ -449,18 +546,15 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                   ),
                   child: Text(
                     _isRecovering
-                        ? 'I-VERIFY SAGOT'
-                        : ((widget.isRegistration ||
-                                _forceNewPin ||
-                                _isUpdatingPin)
-                            ? 'I-CONFIRM & SAVE'
-                            : 'I-UNLOCK'),
+                        ? _getTxt('btn_verify')
+                        : ((widget.isRegistration || _isUpdatingPin)
+                            ? _getTxt('btn_confirm')
+                            : _getTxt('btn_unlock')),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 if (!widget.isRegistration &&
                     !_isRecovering &&
-                    !_forceNewPin &&
                     !_isUpdatingPin) ...[
                   const SizedBox(height: 20),
                   TextButton(
@@ -470,10 +564,12 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                         _errorText = "";
                       });
                     },
-                    child: const Text(
-                      'Nakalimutan ang PIN Code?',
+                    child: Text(
+                      _getTxt('forgot_pin'),
                       style: TextStyle(
-                          color: Color(0xFFFFD700),
+                          color: widget.isTrialExpiredMode
+                              ? Colors.redAccent
+                              : const Color(0xFFFFD700),
                           fontSize: 13,
                           decoration: TextDecoration.underline),
                     ),
@@ -487,9 +583,10 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
                         _errorText = "";
                       });
                     },
-                    child: const Text(
-                      'Bumalik sa Lock Screen',
-                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    child: Text(
+                      _getTxt('back_lock'),
+                      style:
+                          const TextStyle(color: Colors.white38, fontSize: 13),
                     ),
                   )
                 ]
@@ -602,6 +699,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   StreamSubscription? _subscription;
   List _products = [];
   bool _isPremiumUser = false;
+  bool _isTrialExpired = false; // Flag para malaman kung locked sa main screen
+  int _trialDaysLeft = 30;
   List wallets = [];
   String activeWalletId = "default";
   double budget = 0;
@@ -623,12 +722,192 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   Map<String, Color> colorMap = {};
   Timer? _bgSessionTimer;
   final Duration _sessionTimeoutDuration = const Duration(minutes: 5);
+  String _currentLocale = "tl";
+  String _activeDateFilter = "all";
+  DateTimeRange? _selectedDateRange;
+  final Map<String, Map<String, String>> _localizedText = {
+    'en': {
+      'total_budget': 'TOTAL BUDGET',
+      'total_expenses': 'TOTAL EXPENSES',
+      'remaining_budget': 'REMAINING BUDGET',
+      'chart_title': 'Visual Expense Chart',
+      'history_title': 'Expense Entry History',
+      'no_items': 'No encoded expenses. Tap + below!',
+      'search_hint': 'Search category (e.g., Food)...',
+      'search_disabled_hint': 'Search disabled (Trial Expired)',
+      'no_match': 'No matching category found.',
+      'add_expense': 'Add Expense',
+      'edit_expense': 'Edit Entry',
+      'category_label': 'Category (e.g., Food)',
+      'amount_label': 'Amount / Cost',
+      'date_label': 'Transaction Date',
+      'filter_all': 'All',
+      'filter_today': 'Today',
+      'btn_cancel': 'Cancel',
+      'btn_save': 'Save',
+      'btn_update': 'Update',
+      'btn_add': 'Add',
+      'wallet_manager': 'WALLET MANAGER',
+      'btn_add_wallet': 'ADD NEW WALLET',
+      'reset_data': 'Reset App Data',
+      'reset_subtitle': 'Will delete all items',
+      'upgrade_title': 'Upgrade to PRO version',
+      'upgrade_subtitle': 'To unlock all features',
+      'no_exp_err': 'No expenses to export!',
+      'file_sheet_web_warn':
+          'The file sharing sheet only works when installed on a physical phone!',
+      'csv_hdr_wallet': 'Wallet Name',
+      'csv_hdr_budget': 'Current Budget (₱)',
+      'csv_hdr_id': 'Expense ID',
+      'csv_hdr_cat': 'Category / Title',
+      'csv_hdr_amt': 'Amount (₱)',
+      'csv_hdr_date': 'Date and Time',
+      'csv_share_txt': 'Here is my export file from the Gastos Ko App!',
+      'csv_err': 'Error exporting data: ',
+      'billing_err': 'Transaction error. Please try again.',
+      'billing_success': 'Thank you! Your PRO Activation was successful! 🎉',
+      'google_store_err': 'Product from Google Store is not ready yet.',
+      'congrats_title': 'CONGRATULATIONS!',
+      'congrats_desc':
+          'Your new wallet "{name}" has been created with a budget of {budget}.',
+      'email_app_err': 'No email app found or could not be opened.',
+      'email_open_err': 'Error opening email app: ',
+      'edit_wallet_title': 'Edit Budget: {name}',
+      'new_budget_lbl': 'New Budget Amount',
+      'add_fund_title': 'Add Funds: {name}',
+      'current_budget_lbl': 'Current Budget: ',
+      'add_fund_lbl': 'How much to add?',
+      'add_fund_success': 'Successfully added {amount} to your budget!',
+      'btn_add_fund': 'ADD',
+      'main_wallet_del_err': '⚠️ Cannot delete the Main Wallet!',
+      'del_wallet_title': 'Delete Wallet?',
+      'del_wallet_desc':
+          'Are you sure? The wallet "{name}" and ALL its expense history will be permanently lost from the database!',
+      'btn_delete': 'DELETE',
+      'no_wallet_found': 'No wallets found.',
+      'add_fund_tooltip': 'Add Funds',
+      'edit_wallet_tooltip': 'Edit Budget',
+      'del_wallet_tooltip': 'Delete Wallet',
+      'create_wallet_title': 'Create New Wallet',
+      'wallet_name_lbl': 'Wallet Name (e.g., Salary)',
+      'wallet_budget_lbl': 'How much is the budget?',
+      'near_limit_title': 'NEARLY EXHAUSTED!',
+      'near_limit_desc':
+          'Warning! You have spent over 90% of your budget!\n\nAdded Amount: {amount}\n\nYour Maximum Budget is only {budget}.',
+      'btn_near_limit': 'I CAN HANDLE IT',
+      'exhausted_title': 'BUDGET EXHAUSTED!',
+      'exhausted_desc': 'Your budget is completely used up. Add funds or not?',
+      'btn_no': 'NO',
+      'pre_add_budget_title': 'Please add a budget first!',
+      'btn_set_budget': 'SET BUDGET',
+      'pro_plan_title': 'SELECT A PRO PLAN',
+      'pro_plan_desc':
+          'Choose the right package. Supports GCash, Cards, etc. via Google Play Console Secure Checkout.',
+      'lang_lbl': 'App Language',
+      'reset_confirm_title': 'Reset all data?',
+      'reset_confirm_desc':
+          'Are you sure? This will delete all your saved data including your PIN code.',
+      'btn_reset': 'RESET',
+      'edit_entry_tooltip': 'Edit entry',
+      'del_entry_tooltip': 'Delete entry',
+    },
+    'tl': {
+      'total_budget': 'TOTAL BADGET',
+      'total_expenses': 'TOTAL GASTOS',
+      'remaining_budget': 'NATITIRANG BADGET',
+      'chart_title': 'Gastos Biswal Chart',
+      'history_title': 'History ng mga Ginastos',
+      'no_items': 'Walang pang ginastos. I-tap ang + sa ibaba!',
+      'search_hint': 'Maghanap ng kategorya (e.g. Pagkain)...',
+      'search_disabled_hint': 'Bawal maghanap (Expired na ang Trial)',
+      'no_match': 'Walang nahanap na tugmang kategorya.',
+      'add_expense': 'Magdagdag ng Gastos',
+      'edit_expense': 'I-Edit ang Entry',
+      'category_label': 'Kategorya (e.g. Pagkain)',
+      'amount_label': 'Magkano / Halaga',
+      'date_label': 'Petsa ng Transaksyon',
+      'filter_all': 'Lahat',
+      'filter_today': 'Ngayon',
+      'btn_cancel': 'I-Kansela',
+      'btn_save': 'I-Save',
+      'btn_update': 'I-Update',
+      'btn_add': 'Idagdag',
+      'wallet_manager': 'WALLET MANAGER',
+      'btn_add_wallet': 'MAGDAGDAG',
+      'reset_data': 'I-Reset ang App',
+      'reset_subtitle': 'Buburahin lahat ng entries',
+      'upgrade_title': 'Mag-upgrade sa PRO version',
+      'upgrade_subtitle': 'Para ma-unlock ang lahat ng features',
+      'no_exp_err': 'Walang mga gastos na maie-export!',
+      'file_sheet_web_warn':
+          'Ang file sharing sheet ay gumagana lang kapag naka-install na sa totoong CP!',
+      'csv_hdr_wallet': 'Wallet Name',
+      'csv_hdr_budget': 'Current Budget (₱)',
+      'csv_hdr_id': 'Expense ID',
+      'csv_hdr_cat': 'Kategorya / Pamagat',
+      'csv_hdr_amt': 'Halaga (₱)',
+      'csv_hdr_date': 'Petsa at Oras',
+      'csv_share_txt': 'Narito ang aking export file galing sa Gastos Ko App!',
+      'csv_err': 'May error sa pag-export: ',
+      'billing_err': 'May error sa transaksyon. Subukan muli.',
+      'billing_success': 'Salamat! Matagumpay ang iyong PRO Activation! 🎉',
+      'google_store_err': 'Hindi pa handa ang produkto mula sa Google Store.',
+      'congrats_title': 'CONGRATULATIONS!',
+      'congrats_desc':
+          'Ang iyong bagong wallet "{name}" ay nagawa na at may budget na {budget}.',
+      'email_app_err': 'Walang nahanap na email app o hindi mabuksan.',
+      'email_open_err': 'May error sa pagbubukas ng email app: ',
+      'edit_wallet_title': 'I-edit Budget: {name}',
+      'new_budget_lbl': 'Bagong Budget Amount',
+      'add_fund_title': 'Magdagdag Pondo: {name}',
+      'current_budget_lbl': 'Kasalukuyang Budget: ',
+      'add_fund_lbl': 'Magkano ang idadagdag?',
+      'add_fund_success':
+          'Matagumpay na nakapagdagdag ng {amount} sa iyong budget!',
+      'btn_add_fund': 'I-DAGDAG',
+      'main_wallet_del_err': '⚠️ Hindi pwedeng burahin ang Main Wallet!',
+      'del_wallet_title': 'Burahin ang Wallet?',
+      'del_wallet_desc':
+          'Sigurado ka ba? Permanenteng mawawala ang wallet na "{name}" pati ang LAHAT ng history ng expenses nito sa database!',
+      'btn_delete': 'I-DELETE',
+      'no_wallet_found': 'Walang nahanap na wallet.',
+      'add_fund_tooltip': 'Magdagdag Pondo',
+      'edit_wallet_tooltip': 'Edit Budget',
+      'del_wallet_tooltip': 'Delete Wallet',
+      'create_wallet_title': 'Gumawa ng Bagong Wallet',
+      'wallet_name_lbl': 'Pangalan ng Wallet (e.g. Sweldo)',
+      'wallet_budget_lbl': 'Magkano ang Budget?',
+      'near_limit_title': 'MALAPIT NA MAUBOS!',
+      'near_limit_desc':
+          'Babala! nasa mahigit 90% na ang iyong nagagastos!\n\nIdaragdag na Halaga: {amount}\n\nAng iyong Maximum Budget lamang ay {budget}.',
+      'btn_near_limit': 'KAYANG-KAYA PA',
+      'exhausted_title': 'UBOS NA ANG BUDGET!',
+      'exhausted_desc': 'Ubos na ang iyong budget. Magdagdag o hindi?',
+      'btn_no': 'HINDI',
+      'pre_add_budget_title': 'Mag-add ka muna ng budget!',
+      'btn_set_budget': 'I-SET BUDGET',
+      'pro_plan_title': 'PUMILI NG PRO PLAN',
+      'pro_plan_desc':
+          'Piliin ang tamang package. Sinusuportahan nito ang GCash, Cards, atbp. sa pamamagitan ng Google Play Console Secure Checkout.',
+      'lang_lbl': 'Wika ng App',
+      'reset_confirm_title': 'I-reset lahat ng data?',
+      'reset_confirm_desc':
+          'Sigurado ka ba? Buburahin nito ang lahat ng na-save mong data pati ang iyong PIN code.',
+      'btn_reset': 'I-RESET',
+      'edit_entry_tooltip': 'I-edit ang entry',
+      'del_entry_tooltip': 'Burahin ang entry',
+    }
+  };
+  String _getTxt(String key) {
+    return _localizedText[_currentLocale]?[key] ?? key;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     loadData();
-    _checkPremiumState();
+    _checkPremiumAndTrialState();
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((Duration timestamp) {
         _initializeBilling();
@@ -654,12 +933,23 @@ class HomeScreenState extends State with WidgetsBindingObserver {
 
   void _lockAppSession() {
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-          builder: (context) => const PinCodeScreen(isRegistration: false)),
-      (route) => false,
-    );
+    final prefs = SharedPreferences.getInstance().then((p) {
+      String? installDateStr = p.getString('app_install_date');
+      bool isExpired = false;
+      if (installDateStr != null) {
+        DateTime installDate = DateTime.parse(installDateStr);
+        int daysUsed = DateTime.now().difference(installDate).inDays;
+        bool isPremium = p.getBool('is_premium_user') ?? false;
+        if (daysUsed >= 30 && !isPremium) isExpired = true;
+      }
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+            builder: (context) => PinCodeScreen(
+                isRegistration: false, isTrialExpiredMode: isExpired)),
+        (route) => false,
+      );
+    });
   }
 
   void _initializeBilling() {
@@ -694,17 +984,20 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   Future _exportWalletToCSV() async {
+    if (_isTrialExpired && !_isPremiumUser) {
+      _showUpgradeOptionsBottomSheet();
+      return;
+    }
     if (all.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Walang mga gastos na maie-export!')),
+        SnackBar(content: Text(_getTxt('no_exp_err'))),
       );
       return;
     }
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Ang file sharing sheet ay gumagana lang kapag naka-install na sa totoong CP!'),
+        SnackBar(
+          content: Text(_getTxt('file_sheet_web_warn')),
           backgroundColor: Colors.orange,
         ),
       );
@@ -722,12 +1015,12 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       }
       List<List> csvRows = [
         [
-          'Wallet Name',
-          'Current Budget (₱)',
-          'Expense ID',
-          'Kategorya / Pamagat',
-          'Halaga (₱)',
-          'Petsa at Oras'
+          _getTxt('csv_hdr_wallet'),
+          _getTxt('csv_hdr_budget'),
+          _getTxt('csv_hdr_id'),
+          _getTxt('csv_hdr_cat'),
+          _getTxt('csv_hdr_amt'),
+          _getTxt('csv_hdr_date')
         ]
       ];
       for (var expense in all) {
@@ -749,12 +1042,11 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       final File file = File(filePath);
       await file.writeAsString(csvData, encoding: utf8);
       final XFile xFile = XFile(filePath);
-      await Share.shareXFiles([xFile],
-          text: 'Narito ang aking export file galing sa Gastos Ko App!');
+      await Share.shareXFiles([xFile], text: _getTxt('csv_share_txt'));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('May error sa pag-export: $e')),
+          SnackBar(content: Text("${_getTxt('csv_err')}$e")),
         );
       }
     }
@@ -766,8 +1058,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       } else {
         if (purchaseDetails.status == PurchaseStatus.error) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('May error sa transaksyon. Subukan muli.')),
+            SnackBar(content: Text(_getTxt('billing_err'))),
           );
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
             purchaseDetails.status == PurchaseStatus.restored) {
@@ -785,18 +1076,17 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     await prefs.setBool('is_premium_user', true);
     setState(() {
       _isPremiumUser = true;
+      _isTrialExpired = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Salamat! Matagumpay ang iyong PRO Activation! 🎉')),
+      SnackBar(content: Text(_getTxt('billing_success'))),
     );
   }
 
   void _buyPlan(String productId) {
     if (_products.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Hindi pa handa ang produkto mula sa Google Store.')),
+        SnackBar(content: Text(_getTxt('google_store_err'))),
       );
       return;
     }
@@ -817,16 +1107,40 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Future _checkPremiumState() async {
+  Future _checkPremiumAndTrialState() async {
     final p = await SharedPreferences.getInstance();
+    String? installDateStr = p.getString('app_install_date');
+    int calculatedLeft = 30;
+    bool expired = false;
+    bool isPremium = kIsWeb ? false : (p.getBool('is_premium_user') ?? false);
+    if (installDateStr != null) {
+      DateTime installDate = DateTime.parse(installDateStr);
+      int daysUsed = DateTime.now().difference(installDate).inDays;
+      calculatedLeft = 30 - daysUsed;
+      if (calculatedLeft <= 0) {
+        calculatedLeft = 0;
+        if (!isPremium) expired = true;
+      }
+    }
     setState(() {
-      _isPremiumUser = kIsWeb ? false : (p.getBool('is_premium_user') ?? false);
+      _isPremiumUser = isPremium;
+      _currentLocale = p.getString('app_lang_locale') ?? "tl";
+      _trialDaysLeft = calculatedLeft;
+      _isTrialExpired = expired;
+// KUNG EXPIRED NA AT HINDI PREMIUM: Pwersahang ibalik sa default (Main) wallet lang
+      if (expired) {
+        activeWalletId = "default";
+      }
     });
+    if (expired) {
+      loadData();
+    }
   }
 
   Future loadData() async {
     final p = await SharedPreferences.getInstance();
     setState(() {
+      _currentLocale = p.getString('app_lang_locale') ?? "tl";
       String? wData = p.getString('app_wallets');
       if (wData != null) {
         List l = jsonDecode(wData);
@@ -834,7 +1148,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       } else {
         wallets = [AppWallet(id: "default", name: "Main Wallet", budget: 0.0)];
       }
-      activeWalletId = p.getString('active_wallet_id') ?? "default";
+// Kung expired, force default wallet. Kung hindi, kunin ang naka-save.
+      activeWalletId = _isTrialExpired
+          ? "default"
+          : (p.getString('active_wallet_id') ?? "default");
       AppWallet? selectedWallet;
       for (var w in wallets) {
         if (w.id == activeWalletId) {
@@ -848,7 +1165,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               : AppWallet(id: "default", name: "Main Wallet", budget: 0.0));
       activeWalletId = activeWallet.id;
       budget = activeWallet.budget;
-      String? d = p.getString('expenses_$activeWalletId');
+      String? d = p.getString('expenses$activeWalletId');
       if (d != null) {
         List l = jsonDecode(d);
         all = l.map((e) => Expense.fromJson(e)).toList();
@@ -862,14 +1179,17 @@ class HomeScreenState extends State with WidgetsBindingObserver {
 
   Future saveData() async {
     final p = await SharedPreferences.getInstance();
+    await p.setString('app_lang_locale', _currentLocale);
     await p.setString(
         'app_wallets', jsonEncode(wallets.map((w) => w.toJson()).toList()));
     await p.setString('active_wallet_id', activeWalletId);
-    await p.setString('expenses_$activeWalletId',
+    await p.setString('expenses$activeWalletId',
         jsonEncode(all.map((e) => e.toJson()).toList()));
   }
 
   void _switchWallet(String id) async {
+    if (_isTrialExpired && !_isPremiumUser)
+      return; // Naka-disable kapag expired
     final p = await SharedPreferences.getInstance();
     await p.setString('active_wallet_id', id);
     setState(() {
@@ -877,6 +1197,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       selectedIndex = null;
       searchQuery = "";
       _searchController.clear();
+      _activeDateFilter = "all";
+      _selectedDateRange = null;
     });
     loadData();
   }
@@ -893,9 +1215,9 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             const Icon(Icons.check_circle_outline,
                 color: Color(0xFF00E676), size: 60),
             const SizedBox(height: 16),
-            const Text(
-              'CONGRATULATIONS!',
-              style: TextStyle(
+            Text(
+              _getTxt('congrats_title'),
+              style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontStyle: FontStyle.normal,
@@ -903,22 +1225,26 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ang iyong bagong wallet "$name" ay nagawa na at may budget na ${peso(budgetAmt)}.',
+              _getTxt('congrats_desc')
+                  .replaceAll('{name}', name)
+                  .replaceAll('{budget}', peso(budgetAmt)),
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFFD700),
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-              ),
-              child: const Text('OKAY',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            )
+            Navigator.canPop(context)
+                ? ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFD700),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text('OKAY',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  )
+                : const SizedBox(),
           ],
         ),
       ),
@@ -954,14 +1280,13 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       );
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Walang nahanap na email app o hindi mabuksan.')),
+          SnackBar(content: Text(_getTxt('email_app_err'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('May error sa pagbubukas ng email app: $e')),
+          SnackBar(content: Text("${_getTxt('email_open_err')}$e")),
         );
       }
     }
@@ -986,7 +1311,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: Text('I-edit Budget: ${wallet.name}'),
+        title: Text(
+            _getTxt('edit_wallet_title').replaceAll('{name}', wallet.name)),
         content: TextField(
           controller: budgetCtrl,
           keyboardType: TextInputType.number,
@@ -994,14 +1320,14 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             FilteringTextInputFormatter.digitsOnly,
             CommaFormatter()
           ],
-          decoration: const InputDecoration(
-              prefixText: '₱ ', labelText: 'Bagong Budget Amount'),
+          decoration: InputDecoration(
+              prefixText: '₱ ', labelText: _getTxt('new_budget_lbl')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('I-KANSELA',
-                style: TextStyle(color: Colors.white30)),
+            child: Text(_getTxt('btn_cancel'),
+                style: const TextStyle(color: Colors.white30)),
           ),
           TextButton(
             onPressed: () {
@@ -1020,8 +1346,73 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 Navigator.pop(context);
               }
             },
-            child: const Text('I-SAVE',
-                style: TextStyle(
+            child: Text(_getTxt('btn_save'),
+                style: const TextStyle(
+                    color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddAmountToWalletDialog(AppWallet wallet) {
+    final amountCtrl = TextEditingController(text: "0");
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title:
+            Text(_getTxt('add_fund_title').replaceAll('{name}', wallet.name)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("${_getTxt('current_budget_lbl')}${peso(wallet.budget)}",
+                style: const TextStyle(color: Colors.white54, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                CommaFormatter()
+              ],
+              decoration: InputDecoration(
+                  prefixText: '₱ ', labelText: _getTxt('add_fund_lbl')),
+              onTap: () {
+                amountCtrl.clear();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(_getTxt('btn_cancel'),
+                style: const TextStyle(color: Colors.white30)),
+          ),
+          TextButton(
+            onPressed: () {
+              double addedAmt =
+                  double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0.0;
+              setState(() {
+                wallet.budget += addedAmt;
+                if (wallet.id == activeWalletId) {
+                  budget = wallet.budget;
+                }
+                amountCtrl.clear();
+                saveData();
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(_getTxt('add_fund_success')
+                        .replaceAll('{amount}', peso(addedAmt)))),
+              );
+            },
+            child: Text(_getTxt('btn_add_fund'),
+                style: const TextStyle(
                     color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
           )
         ],
@@ -1034,8 +1425,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     if (wallet.id == "default") {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ Hindi pwedeng burahin ang Main Wallet!'),
+        SnackBar(
+          content: Text(_getTxt('main_wallet_del_err')),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -1045,15 +1436,15 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Burahin ang Wallet?',
-            style: TextStyle(color: Colors.redAccent)),
-        content: Text(
-            'Sigurado ka ba? Permanenteng mawawala ang wallet na "${wallet.name}" pati ang LAHAT ng history ng expenses nito sa database!'),
+        title: Text(_getTxt('del_wallet_title'),
+            style: const TextStyle(color: Colors.redAccent)),
+        content:
+            Text(_getTxt('del_wallet_desc').replaceAll('{name}', wallet.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('I-KANSELA',
-                style: TextStyle(color: Colors.white30)),
+            child: Text(_getTxt('btn_cancel'),
+                style: const TextStyle(color: Colors.white30)),
           ),
           TextButton(
             onPressed: () async {
@@ -1071,14 +1462,18 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     activeWalletId = "default";
                   }
                 }
-                saveData();
               });
-              loadData();
+              await p.setString('app_wallets',
+                  jsonEncode(wallets.map((w) => w.toJson()).toList()));
+              await p.setString('active_wallet_id', activeWalletId);
               setModalState(() {});
-              Navigator.pop(context);
+              loadData();
+              if (mounted) {
+                Navigator.pop(context);
+              }
             },
-            child: const Text('I-DELETE',
-                style: TextStyle(
+            child: Text(_getTxt('btn_delete'),
+                style: const TextStyle(
                     color: Colors.redAccent, fontWeight: FontWeight.bold)),
           )
         ],
@@ -1087,6 +1482,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   void _showWalletManagerDialog() {
+    if (_isTrialExpired && !_isPremiumUser) {
+      _showUpgradeOptionsBottomSheet();
+      return;
+    }
     showDialog(
       context: context,
       builder: (BuildContext context) => StatefulBuilder(
@@ -1095,11 +1494,13 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.account_balance_wallet, color: Color(0xFFFFD700)),
-                  SExpandingLabel(width: 8),
-                  Text('WALLET MANAGER', style: TextStyle(fontSize: 16)),
+                  const Icon(Icons.account_balance_wallet,
+                      color: Color(0xFFFFD700)),
+                  const SExpandingLabel(width: 8),
+                  Text(_getTxt('wallet_manager'),
+                      style: const TextStyle(fontSize: 16)),
                 ],
               ),
               IconButton(
@@ -1115,7 +1516,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: wallets.isEmpty
-                      ? const Center(child: Text('Walang nahanap na wallet.'))
+                      ? Center(child: Text(_getTxt('no_wallet_found')))
                       : ListView.builder(
                           shrinkWrap: true,
                           itemCount: wallets.length,
@@ -1143,9 +1544,18 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    icon: const Icon(Icons.add,
+                                        color: Color(0xFFFFD700), size: 18),
+                                    tooltip: _getTxt('add_fund_tooltip'),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _showAddAmountToWalletDialog(w);
+                                    },
+                                  ),
+                                  IconButton(
                                     icon: const Icon(Icons.edit,
                                         color: Colors.white38, size: 18),
-                                    tooltip: 'Edit Budget',
+                                    tooltip: _getTxt('edit_wallet_tooltip'),
                                     onPressed: () =>
                                         _showEditWalletBudgetDialog(
                                             w, setModalState),
@@ -1154,7 +1564,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline,
                                           color: Colors.redAccent, size: 18),
-                                      tooltip: 'Delete Wallet',
+                                      tooltip: _getTxt('del_wallet_tooltip'),
                                       onPressed: () =>
                                           _showDeleteWalletConfirmDialog(
                                               w, setModalState),
@@ -1183,7 +1593,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                       _showAddWalletDialog();
                     },
                     icon: const Icon(Icons.add_card, size: 18),
-                    label: const Text('MAGDAGDAG'),
+                    label: Text(_getTxt('btn_add_wallet')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           const Color(0xFFFFD700).withValues(alpha: 0.15),
@@ -1208,15 +1618,15 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Gumawa ng Bagong Wallet'),
+        title: Text(_getTxt('create_wallet_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                  labelText: 'Pangalan ng Wallet (e.g. Sweldo)'),
+              decoration:
+                  InputDecoration(labelText: _getTxt('wallet_name_lbl')),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -1226,16 +1636,16 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 FilteringTextInputFormatter.digitsOnly,
                 CommaFormatter()
               ],
-              decoration: const InputDecoration(
-                  prefixText: '₱ ', labelText: 'Magkano ang Budget?'),
+              decoration: InputDecoration(
+                  prefixText: '₱ ', labelText: _getTxt('wallet_budget_lbl')),
             ),
           ],
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('I-KANSELA',
-                  style: TextStyle(color: Colors.white30))),
+              child: Text(_getTxt('btn_cancel'),
+                  style: const TextStyle(color: Colors.white30))),
           TextButton(
             onPressed: () {
               if (nameCtrl.text.isNotEmpty && budgetCtrl.text.isNotEmpty) {
@@ -1258,8 +1668,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 });
               }
             },
-            child: const Text('I-SAVE',
-                style: TextStyle(
+            child: Text(_getTxt('btn_save'),
+                style: const TextStyle(
                     color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
           )
         ],
@@ -1275,15 +1685,15 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: Colors.orangeAccent, width: 1.5)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
+            const Icon(Icons.warning_amber_rounded,
                 color: Colors.orangeAccent, size: 28),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'MALAPIT NA MAUBOS!',
-                style: TextStyle(
+                _getTxt('near_limit_title'),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold),
@@ -1292,16 +1702,16 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           ],
         ),
         content: Text(
-          'Babala! nasa mahigit 90% na ang iyong nagagastos!\n\n'
-          'Idaragdag na Halaga: ${peso(newAmount)}\n\n'
-          'Ang iyong Maximum Budget lamang ay ${peso(budget)}.',
+          _getTxt('near_limit_desc')
+              .replaceAll('{amount}', peso(newAmount))
+              .replaceAll('{budget}', peso(budget)),
           style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('KAYANG-KAYA PA',
-                style: TextStyle(
+            child: Text(_getTxt('btn_near_limit'),
+                style: const TextStyle(
                     color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
           )
         ],
@@ -1309,23 +1719,24 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     );
   }
 
-  void _showOverbudgetDialog(double currentTotal, double newAmount) {
+  void _showBudgetExhaustedAlert() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xFF2C1A1A),
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: Colors.redAccent, width: 1.5)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
+            const Icon(Icons.error_outline_rounded,
                 color: Colors.redAccent, size: 28),
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'OVERBUDGET WARNING!',
-                style: TextStyle(
+                _getTxt('exhausted_title'),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold),
@@ -1334,18 +1745,37 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           ],
         ),
         content: Text(
-          'Sobra na sa budget ag iyong ginastos.\n\n'
-          'Idaragdag na Halaga: ${peso(newAmount)}\n\n'
-          'Ang iyong Maximum Budget lamang ay ${peso(budget)}.',
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
+          _getTxt('exhausted_desc'),
+          style: const TextStyle(color: Colors.white70, fontSize: 15),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Okay',
-                style: TextStyle(
-                    color: Colors.redAccent, fontWeight: FontWeight.bold)),
-          )
+            child: Text(_getTxt('btn_no'),
+                style: const TextStyle(
+                    color: Colors.white38, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              AppWallet? currentWallet;
+              for (var w in wallets) {
+                if (w.id == activeWalletId) {
+                  currentWallet = w;
+                  break;
+                }
+              }
+              if (currentWallet != null) {
+                _showAddAmountToWalletDialog(currentWallet);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+            ),
+            child: Text(_getTxt('btn_add_fund').replaceAll('I-', ''),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -1360,15 +1790,15 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           actionsAlignment: MainAxisAlignment.end,
-          title: const Text(
-            'Mag-add ka muna ng budget!',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          title: Text(
+            _getTxt('pre_add_budget_title'),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('I-KANSELA',
-                  style: TextStyle(color: Colors.white38)),
+              child: Text(_getTxt('btn_cancel'),
+                  style: const TextStyle(color: Colors.white38)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1388,8 +1818,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 backgroundColor: const Color(0xFFFFD700),
                 foregroundColor: Colors.black,
               ),
-              child: const Text('I-SET BUDGET',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(_getTxt('btn_set_budget'),
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1402,165 +1832,246 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   void _showCounselingAddExpenseDialog() {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
+    DateTime napilingPetsa = DateTime.now();
     showDialog(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Magdagdag ng Gastos'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtrl,
-              textCapitalization: TextCapitalization.words,
-              decoration:
-                  const InputDecoration(labelText: 'Kategorya (e.g. Pagkain)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                CommaFormatter()
-              ],
-              decoration: const InputDecoration(
-                  prefixText: '₱ ', labelText: 'Magkano / Halaga'),
-            ),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Text(_getTxt('add_expense')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration:
+                    InputDecoration(labelText: _getTxt('category_label')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  CommaFormatter()
+                ],
+                decoration: InputDecoration(
+                    prefixText: '₱ ', labelText: _getTxt('amount_label')),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    const Icon(Icons.calendar_today, color: Color(0xFFFFD700)),
+                title: Text(_getTxt('date_label'),
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.white54)),
+                subtitle: Text(DateFormat('yyyy-MM-dd').format(napilingPetsa),
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                onTap: () async {
+                  final DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: napilingPetsa,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2101),
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: Color(0xFFFFD700),
+                          onPrimary: Colors.black,
+                          surface: Color(0xFF1E1E1E),
+                        ),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null && picked != napilingPetsa) {
+                    setModalState(() {
+                      napilingPetsa = picked;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(_getTxt('btn_cancel'),
+                    style: const TextStyle(color: Colors.white30))),
+            TextButton(
+              onPressed: () {
+                if (titleCtrl.text.isNotEmpty && amountCtrl.text.isNotEmpty) {
+                  String key = titleCtrl.text.toLowerCase().trim();
+                  double amt =
+                      double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
+                  double kasalukuyangTotal =
+                      all.fold(0, (sum, item) => sum + item.amount);
+                  double bagongTotal = kasalukuyangTotal + amt;
+                  double natitiraPagkatapos = budget - bagongTotal;
+                  Color itemColor = colorMap[key] ??
+                      dynamicColors[colorMap.length % dynamicColors.length];
+                  setState(() {
+                    final newExpense = Expense(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      title: titleCtrl.text.trim(),
+                      amount: amt,
+                      date: napilingPetsa,
+                      color: itemColor,
+                    );
+                    all.add(newExpense);
+                    saveData();
+                  });
+                  Navigator.pop(context);
+                  if (natitiraPagkatapos <= 0) {
+                    Future.delayed(const Duration(milliseconds: 150), () {
+                      _showBudgetExhaustedAlert();
+                    });
+                  } else if (bagongTotal >= (budget * 0.9)) {
+                    Future.delayed(const Duration(milliseconds: 150), () {
+                      _showNearLimitBudgetDialog(kasalukuyangTotal, amt);
+                    });
+                  }
+                } else {
+                  Navigator.pop(context);
+                }
+              },
+              child: Text(_getTxt('btn_add'),
+                  style: const TextStyle(color: Color(0xFFFFD700))),
+            )
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('I-KANSELA',
-                  style: TextStyle(color: Colors.white30))),
-          TextButton(
-            onPressed: () {
-              if (titleCtrl.text.isNotEmpty && amountCtrl.text.isNotEmpty) {
-                String key = titleCtrl.text.toLowerCase().trim();
-                double amt =
-                    double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
-                double kasalukuyangTotal =
-                    all.fold(0, (sum, item) => sum + item.amount);
-                double bagongTotal = kasalukuyangTotal + amt;
-                bool isOver100 = bagongTotal > budget;
-                bool isOver90 =
-                    (bagongTotal >= (budget * 0.9)) && (bagongTotal <= budget);
-                Color itemColor = colorMap[key] ??
-                    dynamicColors[colorMap.length % dynamicColors.length];
-                setState(() {
-                  final newExpense = Expense(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    title: titleCtrl.text.trim(),
-                    amount: amt,
-                    date: DateTime.now(),
-                    color: itemColor,
-                  );
-                  all.add(newExpense);
-                  saveData();
-                });
-                Navigator.pop(context);
-                if (isOver100) {
-                  Future.delayed(const Duration(milliseconds: 100), () {
-                    _showOverbudgetDialog(kasalukuyangTotal, amt);
-                  });
-                } else if (isOver90) {
-                  Future.delayed(const Duration(milliseconds: 100), () {
-                    _showNearLimitBudgetDialog(kasalukuyangTotal, amt);
-                  });
-                }
-              } else {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('I-ADD GASTOS',
-                style: TextStyle(color: Color(0xFFFFD700))),
-          )
-        ],
       ),
     );
   }
 
   void _showEditExpenseDialog(Expense item) {
+    if (_isTrialExpired && !_isPremiumUser) {
+      _showUpgradeOptionsBottomSheet();
+      return;
+    }
     final titleCtrl = TextEditingController(text: item.title);
     final amountCtrl = TextEditingController(text: fmt(item.amount));
+    DateTime napilingPetsa = item.date;
     showDialog(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Row(
-          children: [
-            Icon(Icons.edit, color: Color(0xFFFFD700)),
-            SizedBox(width: 8),
-            Text('I-edit ang Entry'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtrl,
-              textCapitalization: TextCapitalization.words,
-              decoration:
-                  const InputDecoration(labelText: 'Kategorya (e.g. Pagkain)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountCtrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                CommaFormatter()
-              ],
-              decoration: const InputDecoration(
-                  prefixText: '₱ ', labelText: 'Magkano / Halaga'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('I-KANSELA',
-                  style: TextStyle(color: Colors.white30))),
-          TextButton(
-            onPressed: () {
-              if (titleCtrl.text.isNotEmpty && amountCtrl.text.isNotEmpty) {
-                String newKey = titleCtrl.text.toLowerCase().trim();
-                double newAmt =
-                    double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
-                double kasalukuyangTotalIwan = all
-                    .where((e) => e.id != item.id)
-                    .fold(0, (sum, item) => sum + item.amount);
-                double bagongTotalIwan = kasalukuyangTotalIwan + newAmt;
-                bool isOver100 = bagongTotalIwan > budget;
-                bool isOver90 = (bagongTotalIwan >= (budget * 0.9)) &&
-                    (bagongTotalIwan <= budget);
-                Color updatedColor = colorMap[newKey] ?? item.color;
-                setState(() {
-                  item.title = titleCtrl.text.trim();
-                  item.amount = newAmt;
-                  item.color = updatedColor;
-                  saveData();
-                });
-                Navigator.pop(context);
-                if (isOver100) {
-                  Future.delayed(const Duration(milliseconds: 100), () {
-                    _showOverbudgetDialog(kasalukuyangTotalIwan, newAmt);
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Row(
+            children: [
+              const Icon(Icons.edit, color: Color(0xFFFFD700)),
+              const SizedBox(width: 8),
+              Text(_getTxt('edit_expense')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration:
+                    InputDecoration(labelText: _getTxt('category_label')),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  CommaFormatter()
+                ],
+                decoration: InputDecoration(
+                    prefixText: '₱ ', labelText: _getTxt('amount_label')),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading:
+                    const Icon(Icons.calendar_today, color: Color(0xFFFFD700)),
+                title: Text(_getTxt('date_label'),
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.white54)),
+                subtitle: Text(DateFormat('yyyy-MM-dd').format(napilingPetsa),
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                onTap: () async {
+                  final DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: napilingPetsa,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2101),
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: Color(0xFFFFD700),
+                          onPrimary: Colors.black,
+                          surface: Color(0xFF1E1E1E),
+                        ),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null && picked != napilingPetsa) {
+                    setModalState(() {
+                      napilingPetsa = picked;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(_getTxt('btn_cancel'),
+                    style: const TextStyle(color: Colors.white30))),
+            TextButton(
+              onPressed: () {
+                if (titleCtrl.text.isNotEmpty && amountCtrl.text.isNotEmpty) {
+                  String newKey = titleCtrl.text.toLowerCase().trim();
+                  double newAmt =
+                      double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
+                  double kasalukuyangTotalIwan = all
+                      .where((e) => e.id != item.id)
+                      .fold(0, (sum, item) => sum + item.amount);
+                  double bagongTotalIwan = kasalukuyangTotalIwan + newAmt;
+                  double natitiraPagkatapos = budget - bagongTotalIwan;
+                  Color updatedColor = colorMap[newKey] ?? item.color;
+                  setState(() {
+                    item.title = titleCtrl.text.trim();
+                    item.amount = newAmt;
+                    item.color = updatedColor;
+                    item.date = napilingPetsa;
+                    saveData();
                   });
-                } else if (isOver90) {
-                  Future.delayed(const Duration(milliseconds: 100), () {
-                    _showNearLimitBudgetDialog(kasalukuyangTotalIwan, newAmt);
-                  });
+                  Navigator.pop(context);
+                  if (natitiraPagkatapos <= 0) {
+                    Future.delayed(const Duration(milliseconds: 150), () {
+                      _showBudgetExhaustedAlert();
+                    });
+                  } else if (bagongTotalIwan >= (budget * 0.9)) {
+                    Future.delayed(const Duration(milliseconds: 150), () {
+                      _showNearLimitBudgetDialog(kasalukuyangTotalIwan, newAmt);
+                    });
+                  }
+                } else {
+                  Navigator.pop(context);
                 }
-              } else {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('I-UPDATE',
-                style: TextStyle(
-                    color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
-          )
-        ],
+              },
+              child: Text(_getTxt('btn_update'),
+                  style: const TextStyle(
+                      color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -1594,15 +2105,15 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  const Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.star_rounded,
+                      const Icon(Icons.star_rounded,
                           color: Color(0xFFFFD700), size: 26),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
-                        'PUMILI NG PRO PLAN',
-                        style: TextStyle(
+                        _getTxt('pro_plan_title'),
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFFFFD700),
@@ -1612,10 +2123,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Piliin ang tamang package. Sinusuportahan nito ang GCash, Cards, atbp. sa pamamagitan ng Google Play Console Secure Checkout.',
+                  Text(
+                    _getTxt('pro_plan_desc'),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.white54),
+                    style: const TextStyle(fontSize: 12, color: Colors.white54),
                   ),
                   const SizedBox(height: 20),
                   _buildPlanTile(
@@ -1738,7 +2249,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       required String value,
       required Color color,
       required IconData icon,
-      bool isFullWidth = false}) {
+      bool isFullWidth = false,
+      bool highlightCard = false}) {
     return Container(
       width: isFullWidth ? double.infinity : null,
       padding: const EdgeInsets.all(16),
@@ -1755,16 +2267,17 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             children: [
               Text(title,
                   style: TextStyle(
-                      fontSize: 11,
+                      fontSize: highlightCard ? 13 : 11,
                       color: Colors.white.withValues(alpha: 0.5),
                       fontWeight: FontWeight.w600)),
-              Icon(icon, color: color, size: 16),
+              Icon(icon, color: color, size: highlightCard ? 19 : 16),
             ],
           ),
           const SizedBox(height: 8),
           Text(value,
+              textAlign: TextAlign.start,
               style: TextStyle(
-                  fontSize: isFullWidth ? 22 : 18,
+                  fontSize: highlightCard ? 26 : (isFullWidth ? 22 : 18),
                   fontWeight: FontWeight.bold,
                   color: color)),
         ],
@@ -1772,13 +2285,141 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildSummaryCardDateFilters() {
+    String customBtnLabel = _selectedDateRange == null
+        ? (_currentLocale == 'tl' ? "Pumili ng Range" : "Pick Range")
+        : "\({DateFormat('MM/dd').format(_selectedDateRange!.start)} -\){DateFormat('MM/dd').format(_selectedDateRange!.end)}";
+// Naka-disable lahat ng chips kapag expired na ang trial
+    final bool canInteract = !(_isTrialExpired && !_isPremiumUser);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            ChoiceChip(
+              label: Text(_getTxt('filter_all')),
+              selected: _activeDateFilter == "all",
+              selectedColor: const Color(0xFFFFD700),
+              labelStyle: TextStyle(
+                  color: _activeDateFilter == "all"
+                      ? Colors.black
+                      : Colors.white70),
+              onSelected: canInteract
+                  ? (val) {
+                      if (val) {
+                        setState(() {
+                          _activeDateFilter = "all";
+                          selectedIndex = null;
+                        });
+                      }
+                    }
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            ChoiceChip(
+              label: Text(_getTxt('filter_today')),
+              selected: _activeDateFilter == "today",
+              selectedColor: const Color(0xFFFFD700),
+              labelStyle: TextStyle(
+                  color: _activeDateFilter == "today"
+                      ? Colors.black
+                      : Colors.white70),
+              onSelected: canInteract
+                  ? (val) {
+                      if (val) {
+                        setState(() {
+                          _activeDateFilter = "today";
+                          selectedIndex = null;
+                        });
+                      }
+                    }
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            InputChip(
+              avatar: Icon(Icons.calendar_month,
+                  size: 16,
+                  color: _activeDateFilter == "custom"
+                      ? Colors.black
+                      : const Color(0xFFFFD700)),
+              label: Text(customBtnLabel),
+              selected: _activeDateFilter == "custom",
+              selectedColor: const Color(0xFFFFD700),
+              labelStyle: TextStyle(
+                  color: _activeDateFilter == "custom"
+                      ? Colors.black
+                      : Colors.white70),
+              onPressed: canInteract
+                  ? () async {
+                      final DateTimeRange? picked = await showDateRangePicker(
+                        context: context,
+                        initialDateRange: _selectedDateRange,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2101),
+                        builder: (context, child) => Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.dark(
+                              primary: Color(0xFFFFD700),
+                              onPrimary: Colors.black,
+                              surface: Color(0xFF1E1E1E),
+                              onSurface: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _selectedDateRange = picked;
+                          _activeDateFilter = "custom";
+                          selectedIndex = null;
+                        });
+                      }
+                    }
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    List dateFilteredExpenses = all.where((item) {
+      if (_activeDateFilter == "today") {
+        final ngayon = DateTime.now();
+        return item.date.year == ngayon.year &&
+            item.date.month == ngayon.month &&
+            item.date.day == ngayon.day;
+      } else if (_activeDateFilter == "custom" && _selectedDateRange != null) {
+        final startBoundary = DateTime(
+            _selectedDateRange!.start.year,
+            _selectedDateRange!.start.month,
+            _selectedDateRange!.start.day,
+            0,
+            0,
+            0);
+        final endBoundary = DateTime(
+            _selectedDateRange!.end.year,
+            _selectedDateRange!.end.month,
+            _selectedDateRange!.end.day,
+            23,
+            59,
+            59);
+        return item.date
+                .isAfter(startBoundary.subtract(const Duration(seconds: 1))) &&
+            item.date.isBefore(endBoundary.add(const Duration(seconds: 1)));
+      }
+      return true;
+    }).toList();
     Map<String, List> grouped = {};
     double totalGastos = 0;
     int colorIndex = 0;
     Map<String, Color> activeSessionColors = {};
-    for (var e in all) {
+    for (var e in dateFilteredExpenses) {
       String key = e.title.toLowerCase().trim();
       grouped.putIfAbsent(key, () => []);
       grouped[key]!.add(e);
@@ -1810,9 +2451,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         break;
       }
     }
-    List filteredExpenses = all.where((item) {
+    List finalFilteredExpenses = dateFilteredExpenses.where((item) {
       return item.title.toLowerCase().contains(searchQuery.toLowerCase());
     }).toList();
+    final bool trialExpiredWithNoPremium = _isTrialExpired && !_isPremiumUser;
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -1834,21 +2476,36 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               spacing: 5,
               runSpacing: 2,
               children: [
-                Text(_isPremiumUser ? 'Premium Active' : 'Free Full Version',
-                    style: const TextStyle(
-                        color: Colors.white38,
+                Text(
+                    _isPremiumUser
+                        ? 'Premium Active'
+                        : (trialExpiredWithNoPremium
+                            ? 'Trial Expired'
+                            : 'Free Trial ($_trialDaysLeft days left)'),
+                    style: TextStyle(
+                        color: trialExpiredWithNoPremium
+                            ? Colors.redAccent
+                            : Colors.white38,
                         fontSize: 10,
                         fontWeight: FontWeight.normal,
                         letterSpacing: 0.3)),
-                const Icon(
+                Icon(
                   Icons.fiber_manual_record,
                   size: 6,
-                  color: Color(0xFF00E676),
+                  color: trialExpiredWithNoPremium
+                      ? Colors.redAccent
+                      : const Color(0xFF00E676),
                 ),
-                const Text(
-                  'Lifetime / Active',
+                Text(
+                  _isPremiumUser
+                      ? 'Lifetime / Active'
+                      : (trialExpiredWithNoPremium
+                          ? 'Locked'
+                          : 'Trial Version'),
                   style: TextStyle(
-                      color: Color(0xFF00E676),
+                      color: trialExpiredWithNoPremium
+                          ? Colors.redAccent
+                          : const Color(0xFF00E676),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.3),
@@ -1860,16 +2517,24 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         backgroundColor: const Color(0xFF1E1E1E),
         elevation: 0,
         actions: [
+// Naka-disable/Nakulay pula ang Export Button kung expired na ang trial
           IconButton(
-            icon: const Icon(Icons.download_rounded,
-                color: Color(0xFFFFD700), size: 24),
+            icon: Icon(Icons.download_rounded,
+                color: trialExpiredWithNoPremium
+                    ? Colors.white10
+                    : const Color(0xFFFFD700),
+                size: 24),
             tooltip: 'Export sa CSV',
             onPressed: _exportWalletToCSV,
           ),
+// Naka-disable/Nakulay pula ang Wallet Manager button kung expired na ang trial
           IconButton(
-            icon: const Icon(Icons.account_balance_wallet,
-                color: Color(0xFFFFD700), size: 24),
-            tooltip: 'Wallet Manager',
+            icon: Icon(Icons.account_balance_wallet,
+                color: trialExpiredWithNoPremium
+                    ? Colors.white10
+                    : const Color(0xFFFFD700),
+                size: 24),
+            tooltip: _getTxt('wallet_manager'),
             onPressed: _showWalletManagerDialog,
           )
         ],
@@ -1904,34 +2569,72 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                           Text(
                               _isPremiumUser
                                   ? 'Premium Active'
-                                  : 'Free Full Version (Active)',
-                              style: const TextStyle(
-                                  color: Colors.white38, fontSize: 10)),
+                                  : (trialExpiredWithNoPremium
+                                      ? 'Trial Expired'
+                                      : 'Free Trial ($_trialDaysLeft days left)'),
+                              style: TextStyle(
+                                  color: trialExpiredWithNoPremium
+                                      ? Colors.redAccent
+                                      : Colors.white38,
+                                  fontSize: 10)),
                         ],
                       ),
                     )
                   ],
                 ),
               ),
-              if (!_isPremiumUser)
+              ListTile(
+                leading: const Icon(Icons.language, color: Color(0xFFFFD700)),
+                title: Text(_getTxt('lang_lbl'),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text(_currentLocale == 'en' ? 'English' : 'Tagalog',
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.white38)),
+                trailing: DropdownButton(
+                  value: _currentLocale,
+                  dropdownColor: const Color(0xFF1E1E1E),
+                  underline: const SizedBox(),
+                  onChanged: (String? newLocale) {
+                    if (newLocale != null) {
+                      setState(() {
+                        _currentLocale = newLocale;
+                        saveData();
+                      });
+                    }
+                  },
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'en',
+                        child: Text('English', style: TextStyle(fontSize: 13))),
+                    DropdownMenuItem(
+                        value: 'tl',
+                        child: Text('Tagalog', style: TextStyle(fontSize: 13))),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white10),
+              if (!_isPremiumUser) ...[
                 ListTile(
                   leading:
                       const Icon(Icons.star_rounded, color: Color(0xFFFFD700)),
-                  title: const Text(
-                    'Mag-upgrade sa PRO version',
-                    style: TextStyle(
+                  title: Text(
+                    _getTxt('upgrade_title'),
+                    style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFFFFD700)),
                   ),
-                  subtitle: const Text('Para ma-unlock ang lahat ng features',
-                      style: TextStyle(fontSize: 10, color: Colors.white38)),
+                  subtitle: Text(
+                    _getTxt('upgrade_subtitle'),
+                    style: const TextStyle(fontSize: 10, color: Colors.white38),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _showUpgradeOptionsBottomSheet();
                   },
                 ),
-              const Divider(color: Colors.white10),
+              ],
               ListTile(
                 leading:
                     const Icon(Icons.privacy_tip, color: Color(0xFF00E676)),
@@ -1989,31 +2692,32 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               ListTile(
                 leading:
                     const Icon(Icons.delete_forever, color: Colors.redAccent),
-                title: const Text('Reset App Data',
-                    style: TextStyle(fontSize: 14, color: Colors.redAccent)),
-                subtitle: const Text('Buburahin lahat ng entries',
-                    style: TextStyle(fontSize: 10, color: Colors.white38)),
+                title: Text(_getTxt('reset_data'),
+                    style:
+                        const TextStyle(fontSize: 14, color: Colors.redAccent)),
+                subtitle: Text(_getTxt('reset_subtitle'),
+                    style:
+                        const TextStyle(fontSize: 10, color: Colors.white38)),
                 onTap: () {
                   Navigator.pop(context);
                   showDialog(
                     context: context,
                     builder: (BuildContext context) => AlertDialog(
                       backgroundColor: const Color(0xFF1E1E1E),
-                      title: const Text('I-reset lahat ng data?'),
-                      content: const Text(
-                          'Sigurado ka ba? Buburahin nito ang lahat ng na-save mong data pati ang iyong PIN code.'),
+                      title: Text(_getTxt('reset_confirm_title')),
+                      content: Text(_getTxt('reset_confirm_desc')),
                       actions: [
                         TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: const Text('I-KANSELA',
-                                style: TextStyle(color: Colors.white30))),
+                            child: Text(_getTxt('btn_cancel'),
+                                style: const TextStyle(color: Colors.white30))),
                         TextButton(
                             onPressed: () {
                               clearAllApplicationData();
                               Navigator.pop(context);
                             },
-                            child: const Text('I-RESET',
-                                style: TextStyle(
+                            child: Text(_getTxt('btn_reset'),
+                                style: const TextStyle(
                                     color: Colors.redAccent,
                                     fontWeight: FontWeight.bold))),
                       ],
@@ -2051,20 +2755,23 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   ],
                 ),
                 const SizedBox(height: 16),
+                _buildSummaryCardDateFilters(),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Expanded(
                       child: _buildSummaryCard(
-                        title: 'TOTAL BUDGET',
+                        title: _getTxt('total_budget'),
                         value: peso(budget),
                         color: const Color(0xFFFFD700),
                         icon: Icons.account_balance_wallet,
+                        highlightCard: false,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildSummaryCard(
-                        title: 'TOTAL GASTOS',
+                        title: _getTxt('total_expenses'),
                         value: peso(totalGastos),
                         color: totalGastos > budget
                             ? Colors.redAccent
@@ -2072,13 +2779,14 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                                 ? Colors.orangeAccent
                                 : const Color(0xFF00E676)),
                         icon: Icons.trending_up,
+                        highlightCard: false,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _buildSummaryCard(
-                  title: 'NATITIRANG BUDGET',
+                  title: _getTxt('remaining_budget'),
                   value: peso(natirangBudget),
                   color: natirangBudget < 0
                       ? Colors.redAccent
@@ -2087,11 +2795,12 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                           : Colors.greenAccent),
                   icon: Icons.monetization_on,
                   isFullWidth: true,
+                  highlightCard: true,
                 ),
                 const SizedBox(height: 24),
                 if (chartData.isNotEmpty) ...[
-                  const Text('Gastos Biswal Chart',
-                      style: TextStyle(
+                  Text(_getTxt('chart_title'),
+                      style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.white70)),
@@ -2116,12 +2825,12 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('History ng mga Ginastos',
-                        style: TextStyle(
+                    Text(_getTxt('history_title'),
+                        style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white70)),
-                    Text('${all.length} items',
+                    Text('${finalFilteredExpenses.length} items',
                         style: const TextStyle(color: Colors.white38)),
                   ],
                 ),
@@ -2129,31 +2838,40 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 if (all.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
+// NAKA-DISABLE ANG SEARCH FIELD KAPAG EXPIRED NA ANG TRIAL NG USER
                     child: TextField(
                       controller: _searchController,
+                      enabled: !trialExpiredWithNoPremium,
                       style: const TextStyle(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'Maghanap ng kategorya (e.g. Pagkain)...',
+                        hintText: trialExpiredWithNoPremium
+                            ? _getTxt('search_disabled_hint')
+                            : _getTxt('search_hint'),
                         hintStyle: const TextStyle(
                             color: Colors.white38, fontSize: 13),
                         prefixIcon: const Icon(Icons.search,
                             color: Color(0xFFFFD700), size: 20),
-                        suffixIcon: searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear,
-                                    size: 18, color: Colors.white54),
-                                onPressed: () {
-                                  setState(() {
-                                    searchQuery = "";
-                                    _searchController.clear();
-                                  });
-                                },
-                              )
-                            : null,
+                        suffixIcon:
+                            searchQuery.isNotEmpty && !trialExpiredWithNoPremium
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear,
+                                        size: 18, color: Colors.white54),
+                                    onPressed: () {
+                                      setState(() {
+                                        searchQuery = "";
+                                        _searchController.clear();
+                                      });
+                                    },
+                                  )
+                                : null,
                         filled: true,
                         fillColor: const Color(0xFF1E1E1E),
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 0, horizontal: 16),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white10),
+                        ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: Colors.white10),
@@ -2172,14 +2890,14 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     ),
                   ),
                 const SizedBox(height: 4),
-                if (filteredExpenses.isEmpty)
+                if (finalFilteredExpenses.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 40),
                     child: Center(
                       child: Text(
                           searchQuery.isNotEmpty
-                              ? 'Walang nahanap na tugmang kategorya.'
-                              : 'Walang gastos encoded. I-tap ang + sa ibaba!',
+                              ? _getTxt('no_match')
+                              : _getTxt('no_items'),
                           style: const TextStyle(
                               color: Colors.white38,
                               fontStyle: FontStyle.italic)),
@@ -2189,10 +2907,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredExpenses.length,
+                    itemCount: finalFilteredExpenses.length,
                     itemBuilder: (context, index) {
-                      final item =
-                          filteredExpenses[filteredExpenses.length - 1 - index];
+                      final item = finalFilteredExpenses[
+                          finalFilteredExpenses.length - 1 - index];
                       return Card(
                         color: const Color(0xFF1E1E1E),
                         margin: const EdgeInsets.symmetric(vertical: 6),
@@ -2221,21 +2939,29 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                                       color: Colors.white)),
                               const SizedBox(width: 8),
                               IconButton(
-                                icon: const Icon(Icons.edit,
-                                    color: Color(0xFFFFD700), size: 20),
-                                tooltip: 'I-edit ang entry',
+                                icon: Icon(Icons.edit,
+                                    color: trialExpiredWithNoPremium
+                                        ? Colors.white10
+                                        : const Color(0xFFFFD700),
+                                    size: 20),
+                                tooltip: _getTxt('edit_entry_tooltip'),
                                 onPressed: () => _showEditExpenseDialog(item),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    color: Colors.redAccent, size: 20),
-                                tooltip: 'Burahin ang entry',
-                                onPressed: () {
-                                  setState(() {
-                                    all.remove(item);
-                                    saveData();
-                                  });
-                                },
+                                icon: Icon(Icons.delete_outline,
+                                    color: trialExpiredWithNoPremium
+                                        ? Colors.white10
+                                        : Colors.redAccent,
+                                    size: 20),
+                                tooltip: _getTxt('del_entry_tooltip'),
+                                onPressed: trialExpiredWithNoPremium
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          all.remove(item);
+                                          saveData();
+                                        });
+                                      },
                               )
                             ],
                           ),
@@ -2250,10 +2976,17 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFFFFD700),
+        backgroundColor:
+            trialExpiredWithNoPremium ? Colors.grey : const Color(0xFFFFD700),
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.black, size: 30),
-        onPressed: _checkBudgetBeforeAdding,
+        onPressed: () {
+          if (trialExpiredWithNoPremium) {
+            _showUpgradeOptionsBottomSheet(); // Prompt kapag pinindot ang + habang expired
+          } else {
+            _checkBudgetBeforeAdding();
+          }
+        },
       ),
     );
   }
@@ -2313,7 +3046,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 }
 
-// Helper utility para sa design structure ng list layout spacing
 class SExpandingLabel extends StatelessWidget {
   final double width;
   const SExpandingLabel({super.key, required this.width});
