@@ -146,7 +146,6 @@ workflows:
 
           android {
               namespace = "com.rasmobilelabs.gastosko"
-              // Upgraded to Android 16 System Build Standards
               compileSdk = 36
               ndkVersion = flutter.ndkVersion
 
@@ -162,7 +161,6 @@ workflows:
               defaultConfig {
                   applicationId = "com.rasmobilelabs.gastosko"
                   minSdk = 24
-                  // Force Target API Level 36 for Google Play Store Compliance
                   targetSdk = 36
                   versionCode = flutter.versionCode
                   versionName = flutter.versionName
@@ -183,7 +181,6 @@ workflows:
                   }
               }
 
-              // Forced Billing Library Override Injection to v8.0.0
               configurations.all {
                   resolutionStrategy.eachDependency {
                       if (requested.group == "com.android.billingclient" && requested.name == "billing") {
@@ -202,7 +199,7 @@ workflows:
         script: |
           flutter clean
           flutter pub get
-          flutter build appbundle --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+          flutter build appbundle --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons --build-number=2
 
     artifacts:
       - build/app/outputs/bundle/release/*.aab
