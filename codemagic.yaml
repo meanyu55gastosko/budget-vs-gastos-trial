@@ -107,7 +107,7 @@ workflows:
             android: true
             ios: false
             image_path: "assets/icon.png"
-            min_sdk_android: 21
+            min_sdk_android: 24
           EOF
           flutter pub add flutter_launcher_icons --dev 2>/dev/null || true
           flutter pub get
@@ -160,7 +160,7 @@ workflows:
 
               defaultConfig {
                   applicationId = "com.rasmobilelabs.gastoskofinance"
-                  minSdk = flutter.minSdkVersion
+                  minSdk = 24
                   targetSdk = flutter.targetSdkVersion
                   versionCode = flutter.versionCode
                   versionName = flutter.versionName
