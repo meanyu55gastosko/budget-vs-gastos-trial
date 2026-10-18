@@ -8,7 +8,8 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        PACKAGE_NAME: "com.rasmobilelabs.gastoskofinance"
+        # Ibinalik natin sa saktong pangalan na tinatanggap ng Console mo boss!
+        PACKAGE_NAME: "com.rasmobilelabs.gastosko"
         KEY_ALIAS: "upload"
         STORE_PASSWORD: "bossrod123"
         KEY_PASSWORD: "bossrod123"
@@ -68,7 +69,7 @@ workflows:
 
           echo "=== KEEP FRESH ANDROID FROM FLUTTER 3.32.8 (AGP 8.7.3) ==="
           rm -rf android
-          flutter create --platforms=android --org com.rasmobilelabs --project-name gastoskofinance .
+          flutter create --platforms=android --org com.rasmobilelabs --project-name gastosko .
           git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
           git checkout c5f9933 -- lib/ || true
 
@@ -145,7 +146,7 @@ workflows:
           }
 
           android {
-              namespace = "com.rasmobilelabs.gastoskofinance"
+              namespace = "com.rasmobilelabs.gastosko"
               compileSdk = flutter.compileSdkVersion
               ndkVersion = flutter.ndkVersion
 
@@ -159,7 +160,7 @@ workflows:
                 }
 
               defaultConfig {
-                  applicationId = "com.rasmobilelabs.gastoskofinance"
+                  applicationId = "com.rasmobilelabs.gastosko"
                   minSdk = 24
                   targetSdk = flutter.targetSdkVersion
                   versionCode = flutter.versionCode
