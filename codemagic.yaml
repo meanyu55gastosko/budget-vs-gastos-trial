@@ -8,7 +8,6 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        # Ibinalik natin sa saktong pangalan na tinatanggap ng Console mo boss!
         PACKAGE_NAME: "com.rasmobilelabs.gastosko"
         KEY_ALIAS: "upload"
         STORE_PASSWORD: "bossrod123"
@@ -147,7 +146,8 @@ workflows:
 
           android {
               namespace = "com.rasmobilelabs.gastosko"
-              compileSdk = flutter.compileSdkVersion
+              // Upgraded to Android 16 System Build Standards
+              compileSdk = 36
               ndkVersion = flutter.ndkVersion
 
               compileOptions {
@@ -162,7 +162,8 @@ workflows:
               defaultConfig {
                   applicationId = "com.rasmobilelabs.gastosko"
                   minSdk = 24
-                  targetSdk = flutter.targetSdkVersion
+                  // Force Target API Level 36 for Google Play Store Compliance
+                  targetSdk = 36
                   versionCode = flutter.versionCode
                   versionName = flutter.versionName
               }
@@ -179,6 +180,15 @@ workflows:
               buildTypes {
                   release {
                       signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+
+              // Forced Billing Library Override Injection to v8.0.0
+              configurations.all {
+                  resolutionStrategy.eachDependency {
+                      if (requested.group == "com.android.billingclient" && requested.name == "billing") {
+                          useVersion("8.0.0")
+                      }
                   }
               }
           }
