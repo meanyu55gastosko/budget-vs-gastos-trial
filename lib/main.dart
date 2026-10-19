@@ -103,8 +103,7 @@ class _SplashState extends State<SplashScreen>
           MaterialPageRoute(
               builder: (context) => PinCodeScreen(
                     isRegistration: false,
-                    isTrialExpiredMode:
-                        isExpired, // Ipasa kung expired na ang trial
+                    isTrialExpiredMode: isExpired,
                   )));
     }
   }
@@ -171,7 +170,7 @@ class RegistrationScreen extends StatelessWidget {
 
 class PinCodeScreen extends StatefulWidget {
   final bool isRegistration;
-  final bool isTrialExpiredMode; // Flag kung expired na ang trial ng user
+  final bool isTrialExpiredMode;
   const PinCodeScreen({
     super.key,
     required this.isRegistration,
@@ -412,8 +411,9 @@ class _PinCodeScreenState extends State<PinCodeScreen> {
   Widget build(BuildContext context) {
     String currentTitle =
         widget.isRegistration ? _getTxt('set_pin') : _getTxt('enter_pin');
-    if (widget.isTrialExpiredMode)
+    if (widget.isTrialExpiredMode) {
       currentTitle = _getTxt('trial_expired_title');
+    }
     if (_isUpdatingPin) currentTitle = _getTxt('set_pin');
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -684,8 +684,8 @@ class PiePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant PiePainter o) =>
-      o.selectedIndex != selectedIndex || o.data != data;
+  bool shouldRepaint(covariant PiePainter oldDelegate) =>
+      oldDelegate.selectedIndex != selectedIndex || oldDelegate.data != data;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -699,8 +699,9 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   StreamSubscription? _subscription;
   List _products = [];
   bool _isPremiumUser = false;
-  bool _isTrialExpired = false; // Flag para malaman kung locked sa main screen
+  bool _isTrialExpired = false;
   int _trialDaysLeft = 30;
+  String _purchasedPlanTitle = "";
   List wallets = [];
   String activeWalletId = "default";
   double budget = 0;
@@ -933,22 +934,26 @@ class HomeScreenState extends State with WidgetsBindingObserver {
 
   void _lockAppSession() {
     if (!mounted) return;
-    final prefs = SharedPreferences.getInstance().then((p) {
+    SharedPreferences.getInstance().then((p) {
       String? installDateStr = p.getString('app_install_date');
       bool isExpired = false;
       if (installDateStr != null) {
         DateTime installDate = DateTime.parse(installDateStr);
         int daysUsed = DateTime.now().difference(installDate).inDays;
         bool isPremium = p.getBool('is_premium_user') ?? false;
-        if (daysUsed >= 30 && !isPremium) isExpired = true;
+        if (daysUsed >= 30 && !isPremium) {
+          isExpired = true;
+        }
       }
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-            builder: (context) => PinCodeScreen(
-                isRegistration: false, isTrialExpiredMode: isExpired)),
-        (route) => false,
-      );
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+              builder: (context) => PinCodeScreen(
+                  isRegistration: false, isTrialExpiredMode: isExpired)),
+          (route) => false,
+        );
+      }
     });
   }
 
@@ -1013,7 +1018,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           break;
         }
       }
-      List<List> csvRows = [
+      List<List<dynamic>> csvRows = [
         [
           _getTxt('csv_hdr_wallet'),
           _getTxt('csv_hdr_budget'),
@@ -1062,7 +1067,17 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           );
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
             purchaseDetails.status == PurchaseStatus.restored) {
-          _markAsPremiumUser();
+          String recognizedPlan = "Premium Plan";
+          if (purchaseDetails.productID == 'gastos_ko_monthly') {
+            recognizedPlan = "Monthly Plan";
+          }
+          if (purchaseDetails.productID == 'gastos_ko_semiannual') {
+            recognizedPlan = "Semi-Annual Plan";
+          }
+          if (purchaseDetails.productID == 'gastos_ko_annual') {
+            recognizedPlan = "Annual Plan";
+          }
+          _markAsPremiumUserFromSystem(recognizedPlan);
         }
         if (purchaseDetails.pendingCompletePurchase) {
           _inAppPurchase.completePurchase(purchaseDetails);
@@ -1071,16 +1086,20 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     }
   }
 
-  Future _markAsPremiumUser() async {
+  Future _markAsPremiumUserFromSystem(String planName) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_premium_user', true);
+    await prefs.setString('purchased_plan_title', planName);
     setState(() {
       _isPremiumUser = true;
       _isTrialExpired = false;
+      _purchasedPlanTitle = planName;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_getTxt('billing_success'))),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_getTxt('billing_success'))),
+      );
+    }
   }
 
   void _buyPlan(String productId) {
@@ -1119,7 +1138,9 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       calculatedLeft = 30 - daysUsed;
       if (calculatedLeft <= 0) {
         calculatedLeft = 0;
-        if (!isPremium) expired = true;
+        if (!isPremium) {
+          expired = true;
+        }
       }
     }
     setState(() {
@@ -1127,7 +1148,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       _currentLocale = p.getString('app_lang_locale') ?? "tl";
       _trialDaysLeft = calculatedLeft;
       _isTrialExpired = expired;
-// KUNG EXPIRED NA AT HINDI PREMIUM: Pwersahang ibalik sa default (Main) wallet lang
+      _purchasedPlanTitle = p.getString('purchased_plan_title') ?? "Pro Plan";
       if (expired) {
         activeWalletId = "default";
       }
@@ -1148,7 +1169,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       } else {
         wallets = [AppWallet(id: "default", name: "Main Wallet", budget: 0.0)];
       }
-// Kung expired, force default wallet. Kung hindi, kunin ang naka-save.
       activeWalletId = _isTrialExpired
           ? "default"
           : (p.getString('active_wallet_id') ?? "default");
@@ -1188,8 +1208,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   void _switchWallet(String id) async {
-    if (_isTrialExpired && !_isPremiumUser)
-      return; // Naka-disable kapag expired
+    if (_isTrialExpired && !_isPremiumUser) return;
     final p = await SharedPreferences.getInstance();
     await p.setString('active_wallet_id', id);
     setState(() {
@@ -1252,9 +1271,16 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   Future _launchComplianceUrl(String urlString) async {
-    final Uri url = Uri.parse('https://$urlString');
+    final Uri url = Uri.parse(urlString);
     if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.platformDefault);
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Hindi mabuksan ang link sa cellphone.')),
+        );
+      }
     }
   }
 
@@ -2041,7 +2067,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                       double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
                   double kasalukuyangTotalIwan = all
                       .where((e) => e.id != item.id)
-                      .fold(0, (sum, item) => sum + item.amount);
+                      .fold(0, (sum, e) => sum + e.amount);
                   double bagongTotalIwan = kasalukuyangTotalIwan + newAmt;
                   double natitiraPagkatapos = budget - bagongTotalIwan;
                   Color updatedColor = colorMap[newKey] ?? item.color;
@@ -2289,7 +2315,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     String customBtnLabel = _selectedDateRange == null
         ? (_currentLocale == 'tl' ? "Pumili ng Range" : "Pick Range")
         : "\({DateFormat('MM/dd').format(_selectedDateRange!.start)} -\){DateFormat('MM/dd').format(_selectedDateRange!.end)}";
-// Naka-disable lahat ng chips kapag expired na ang trial
     final bool canInteract = !(_isTrialExpired && !_isPremiumUser);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -2478,10 +2503,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
               children: [
                 Text(
                     _isPremiumUser
-                        ? 'Premium Active'
+                        ? 'Pro Active'
                         : (trialExpiredWithNoPremium
                             ? 'Trial Expired'
-                            : 'Free Trial ($_trialDaysLeft days left)'),
+                            : 'Free Trial Version'),
                     style: TextStyle(
                         color: trialExpiredWithNoPremium
                             ? Colors.redAccent
@@ -2498,7 +2523,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 ),
                 Text(
                   _isPremiumUser
-                      ? 'Lifetime / Active'
+                      ? _purchasedPlanTitle
                       : (trialExpiredWithNoPremium
                           ? 'Locked'
                           : 'Trial Version'),
@@ -2517,7 +2542,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         backgroundColor: const Color(0xFF1E1E1E),
         elevation: 0,
         actions: [
-// Naka-disable/Nakulay pula ang Export Button kung expired na ang trial
           IconButton(
             icon: Icon(Icons.download_rounded,
                 color: trialExpiredWithNoPremium
@@ -2527,7 +2551,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             tooltip: 'Export sa CSV',
             onPressed: _exportWalletToCSV,
           ),
-// Naka-disable/Nakulay pula ang Wallet Manager button kung expired na ang trial
           IconButton(
             icon: Icon(Icons.account_balance_wallet,
                 color: trialExpiredWithNoPremium
@@ -2568,10 +2591,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                           const SizedBox(height: 2),
                           Text(
                               _isPremiumUser
-                                  ? 'Premium Active'
+                                  ? "Pro Active ($_purchasedPlanTitle)"
                                   : (trialExpiredWithNoPremium
                                       ? 'Trial Expired'
-                                      : 'Free Trial ($_trialDaysLeft days left)'),
+                                      : "Free Trial ($_trialDaysLeft days left)"),
                               style: TextStyle(
                                   color: trialExpiredWithNoPremium
                                       ? Colors.redAccent
@@ -2642,7 +2665,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     style: TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
-                  _launchComplianceUrl('google.com');
+                  _launchComplianceUrl(
+                      'https://docs.google.com/document/d/e/2PACX-1vTjonFfWFs9UiUqNne5Ro0c2ab2UhR1mnwe0E1BBl68qrK5gdaqWc9STAAvTAapBSve_7AuS8-rNNpx/pub');
                 },
               ),
               ListTile(
@@ -2652,7 +2676,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                     style: TextStyle(fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
-                  _launchComplianceUrl('google.com');
+                  _launchComplianceUrl(
+                      'https://docs.google.com/document/d/e/2PACX-1vS4ekakFeVHrKq98abpasJFDV9tdEQGFWf9USDoSOADmlY859l75tURqA5qPrcbFwEKfMPb-Bg-hLpL/pub');
                 },
               ),
               ExpansionTile(
@@ -2838,7 +2863,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 if (all.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-// NAKA-DISABLE ANG SEARCH FIELD KAPAG EXPIRED NA ANG TRIAL NG USER
                     child: TextField(
                       controller: _searchController,
                       enabled: !trialExpiredWithNoPremium,
@@ -2982,7 +3006,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
         child: const Icon(Icons.add, color: Colors.black, size: 30),
         onPressed: () {
           if (trialExpiredWithNoPremium) {
-            _showUpgradeOptionsBottomSheet(); // Prompt kapag pinindot ang + habang expired
+            _showUpgradeOptionsBottomSheet();
           } else {
             _checkBudgetBeforeAdding();
           }
