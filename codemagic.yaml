@@ -1,12 +1,62 @@
 workflows:
-  budget-vs-gastos-apk:
-    name: Gastos Ko APK
+  budget-vs-gastos-aab:
+    name: Gastos Ko Pro AAB Compliance
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
       flutter: 3.32.8
       xcode: latest
       cocoapods: default
+      vars:
+        PACKAGE_NAME: "com.rasmobilelabs.gastosko"
+        KEY_ALIAS: "upload"
+        STORE_PASSWORD: "bossrod123"
+        KEY_PASSWORD: "bossrod123"
+        BASE64_KEYSTORE: >
+          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
     scripts:
       - name: Restore App + Set Name + Icon
         script: |
@@ -15,30 +65,142 @@ workflows:
           git checkout c5f9933 -- lib/ || true
           ls -lh assets/icon.png
           cat lib/main.dart | head -10
+
           echo "=== KEEP FRESH ANDROID FROM FLUTTER 3.32.8 (AGP 8.7.3) ==="
           rm -rf android
-          flutter create --platforms=android --org com.gastosko.app --project-name budget_vs_gastosv1 .
+          flutter create --platforms=android --org com.rasmobilelabs --project-name gastosko .
           git checkout main -- lib/ assets/ pubspec.yaml 2>/dev/null || git checkout HEAD -- lib/ assets/ || true
           git checkout c5f9933 -- lib/ || true
+
           echo "=== SET APP NAME TO Gastos Ko ==="
           sed -i '' 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml 2>/dev/null || sed -i 's/android:label="[^"]*"/android:label="Gastos Ko"/' android/app/src/main/AndroidManifest.xml
-          grep label android/app/src/main/AndroidManifest.xml
+
+          echo "=== INJECT QUERIES FOR URL LAUNCHER SAFELY ==="
+          cat > queries_block.txt <<'EOF'
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.PROCESS_TEXT"/>
+                      <data android:mimeType="text/plain"/>
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="https" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.SENDTO" />
+                      <data android:scheme="mailto" />
+                  </intent>
+              </queries>
+          EOF
+
+          awk 'NR==FNR{a=a $0 "\n";next} /<application/{print a} 1' queries_block.txt android/app/src/main/AndroidManifest.xml > temp_manifest.xml
+          mv temp_manifest.xml android/app/src/main/AndroidManifest.xml
+          rm queries_block.txt
+          
+          echo "=== CHECKING INJECTED MANIFEST ==="
+          cat android/app/src/main/AndroidManifest.xml | head -25
+
           echo "=== GENERATE ICON ==="
           cat > flutter_launcher_icons.yaml <<'EOF'
           flutter_icons:
             android: true
             ios: false
             image_path: "assets/icon.png"
-            min_sdk_android: 21
+            min_sdk_android: 24
           EOF
           flutter pub add flutter_launcher_icons --dev 2>/dev/null || true
           flutter pub get
           dart run flutter_launcher_icons || true
           ls android/app/src/main/res/mipmap-hdpi/ic_launcher.png && echo "ICON OK!"
-      - name: Build Protected APK
+
+      - name: Inject Secure Keystore and Signing Files
+        script: |
+          echo "=== RECONSTRUCT PHYSICAL KEYSTORE FROM BASE64 ==="
+          echo "$BASE64_KEYSTORE" | base64 --decode > android/app/upload-keystore.jks
+
+          echo "=== AUTO GENERATE CONFIGURATION SIGNING FIELDS ==="
+          cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+          echo "=== INJECT KOTLIN DSL PRODUCTION SIGNING IN BUILD.GRADLE.KTS ==="
+          cat > android/app/build.gradle.kts <<'EOF'
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          plugins {
+              id("com.android.application")
+              id("kotlin-android")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              namespace = "com.rasmobilelabs.gastosko"
+              compileSdk = 36
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_11
+                  targetCompatibility = JavaVersion.VERSION_11
+              }
+
+              kotlinOptions {
+                  jvmTarget = JavaVersion.VERSION_11.toString()
+                }
+
+              defaultConfig {
+                  applicationId = "com.rasmobilelabs.gastosko"
+                  minSdk = 24
+                  targetSdk = 36
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties.getProperty("keyAlias")
+                      keyPassword = keystoreProperties.getProperty("keyPassword")
+                      storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+                      storePassword = keystoreProperties.getProperty("storePassword")
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+
+              configurations.all {
+                  resolutionStrategy.eachDependency {
+                      if (requested.group == "com.android.billingclient" && requested.name == "billing") {
+                          useVersion("8.0.0")
+                      }
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
+
+      - name: Build Protected AAB for Google Console Compliance
         script: |
           flutter clean
           flutter pub get
-          flutter build apk --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons
+          flutter build appbundle --release --obfuscate --split-debug-info=./symbols --no-tree-shake-icons --build-number=4
+
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+      - symbols/*.symbols
