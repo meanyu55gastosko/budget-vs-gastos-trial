@@ -1018,7 +1018,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           break;
         }
       }
-      List<List> csvRows = [
+      List<List<dynamic>> csvRows = [
         [
           _getTxt('csv_hdr_wallet'),
           _getTxt('csv_hdr_budget'),
@@ -1273,7 +1273,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   Future _launchComplianceUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     try {
-// DIREKTANG i-launch nang hindi na ginagamitan ng canLaunchUrl check
       await launchUrl(
         url,
         mode: LaunchMode.platformDefault,
@@ -1570,68 +1569,90 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                                     color: isSelected
                                         ? const Color(0xFFFFD700)
                                         : Colors.white30),
-                                title: Text(
-                                  w.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      color: isSelected
-                                          ? const Color(0xFFFFD700)
-                                          : Colors.white,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal),
-                                ),
-                                subtitle: Text(
-                                  'Budget: ${peso(w.budget)}',
-                                  style: const TextStyle(
-                                      fontSize: 12, color: Colors.white54),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
+// INAYOS: Ginamit ang Row na may Expanded sa title para hindi itulak ng trailing actions ang wallet name sa phone layout
+                                title: Row(
                                   children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.add,
-                                          color: Color(0xFFFFD700), size: 18),
-                                      tooltip: _getTxt('add_fund_tooltip'),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        _showAddAmountToWalletDialog(w);
-                                      },
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            w.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                color: isSelected
+                                                    ? const Color(0xFFFFD700)
+                                                    : Colors.white,
+                                                fontWeight: isSelected
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Budget: ${peso(w.budget)}',
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.white54),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.edit,
-                                          color: Colors.white38, size: 18),
-                                      tooltip: _currentLocale == 'tl'
-                                          ? 'I-edit ang Pangalan'
-                                          : 'Edit Name',
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      onPressed: () =>
-                                          _showEditWalletBudgetDialog(
-                                              w, setModalState),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.add,
+                                              color: Color(0xFFFFD700),
+                                              size: 18),
+                                          tooltip: _getTxt('add_fund_tooltip'),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            _showAddAmountToWalletDialog(w);
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: const Icon(Icons.edit,
+                                              color: Colors.white38, size: 18),
+                                          tooltip: _currentLocale == 'tl'
+                                              ? 'I-edit ang Pangalan'
+                                              : 'Edit Name',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () =>
+                                              _showEditWalletBudgetDialog(
+                                                  w, setModalState),
+                                        ),
+                                        if (w.id != "default") ...[
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.delete_outline,
+                                                color: Colors.redAccent,
+                                                size: 18),
+                                            tooltip:
+                                                _getTxt('del_wallet_tooltip'),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            onPressed: () =>
+                                                _showDeleteWalletConfirmDialog(
+                                                    w, setModalState),
+                                          ),
+                                        ],
+                                        if (isSelected) ...[
+                                          const SizedBox(width: 8),
+                                          const Icon(Icons.check_circle,
+                                              color: Color(0xFF00E676),
+                                              size: 18),
+                                        ],
+                                      ],
                                     ),
-                                    if (w.id != "default") ...[
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline,
-                                            color: Colors.redAccent, size: 18),
-                                        tooltip: _getTxt('del_wallet_tooltip'),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onPressed: () =>
-                                            _showDeleteWalletConfirmDialog(
-                                                w, setModalState),
-                                      ),
-                                    ],
-                                    if (isSelected) ...[
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.check_circle,
-                                          color: Color(0xFF00E676), size: 18),
-                                    ],
                                   ],
                                 ),
                                 onTap: () {
@@ -1874,7 +1895,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   }
                 }
                 if (currentWallet != null) {
-                  _showEditWalletBudgetDialog(currentWallet, (fn) {});
+                  _showAddAmountToWalletDialog(currentWallet);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -1890,6 +1911,57 @@ class HomeScreenState extends State with WidgetsBindingObserver {
     } else {
       _showCounselingAddExpenseDialog();
     }
+  }
+
+  void _showSetInitialBudgetDialog(AppWallet wallet) {
+    final budgetCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(_getTxt('wallet_budget_lbl')),
+        content: TextField(
+          controller: budgetCtrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            CommaFormatter()
+          ],
+          decoration: const InputDecoration(
+            prefixText: '₱ ',
+            hintText: '0',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(_getTxt('btn_cancel'),
+                style: const TextStyle(color: Colors.white30)),
+          ),
+          TextButton(
+            onPressed: () {
+              if (budgetCtrl.text.isNotEmpty) {
+                double bagongBudget =
+                    double.tryParse(budgetCtrl.text.replaceAll(',', '')) ?? 0.0;
+                setState(() {
+                  wallet.budget = bagongBudget;
+                  if (wallet.id == activeWalletId) {
+                    budget = bagongBudget;
+                  }
+                  saveData();
+                });
+                Navigator.pop(context);
+                _showCounselingAddExpenseDialog();
+              }
+            },
+            child: Text(_getTxt('btn_save'),
+                style: const TextStyle(
+                    color: Color(0xFFFFD700), fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
   }
 
   void _showCounselingAddExpenseDialog() {
@@ -2349,9 +2421,10 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   }
 
   Widget _buildSummaryCardDateFilters() {
+    // INAYOS: Tamang string interpolation format para magpakita ang totoong petsa imbes na code text
     String customBtnLabel = _selectedDateRange == null
         ? (_currentLocale == 'tl' ? "Pumili ng Range" : "Pick Range")
-        : "(\({DateFormat('MM/dd').format(_selectedDateRange!.start)} -\){DateFormat('MM/dd').format(_selectedDateRange!.end)})";
+        : "(${DateFormat('MM/dd').format(_selectedDateRange!.start)} - ${DateFormat('MM/dd').format(_selectedDateRange!.end)})";
     final bool canInteract = !(_isTrialExpired && !_isPremiumUser);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -2563,7 +2636,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                       ? _purchasedPlanTitle
                       : (trialExpiredWithNoPremium
                           ? 'Locked'
-                          : 'Trial Version'),
+                          : '$_trialDaysLeft days left'),
                   style: TextStyle(
                       color: trialExpiredWithNoPremium
                           ? Colors.redAccent
@@ -2604,7 +2677,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           color: const Color(0xFF121212),
           child: Column(
             children: [
-              // Ginawang scrollable ang buong listahan ng menu para kahit humaba ang Contact Us ay hindi mag-ooverflow
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -2765,7 +2837,6 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              // Ang Reset section ay mananatili sa pinaka-ibaba nang ligtas nang walang Spacer()
               const Divider(color: Colors.white10),
               ListTile(
                 leading:
