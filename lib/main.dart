@@ -773,8 +773,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           'Your new wallet "{name}" has been created with a budget of {budget}.',
       'email_app_err': 'No email app found or could not be opened.',
       'email_open_err': 'Error opening email app: ',
-      'edit_wallet_title': 'Edit Budget: {name}',
-      'new_budget_lbl': 'New Budget Amount',
+      'edit_wallet_title': 'Edit Name: {name}',
+      'new_budget_lbl': 'New Wallet Name',
       'add_fund_title': 'Add Funds: {name}',
       'current_budget_lbl': 'Current Budget: ',
       'add_fund_lbl': 'How much to add?',
@@ -787,7 +787,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       'btn_delete': 'DELETE',
       'no_wallet_found': 'No wallets found.',
       'add_fund_tooltip': 'Add Funds',
-      'edit_wallet_tooltip': 'Edit Budget',
+      'edit_wallet_tooltip': 'Edit Name',
       'del_wallet_tooltip': 'Delete Wallet',
       'create_wallet_title': 'Create New Wallet',
       'wallet_name_lbl': 'Wallet Name (e.g., Salary)',
@@ -858,8 +858,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           'Ang iyong bagong wallet "{name}" ay nagawa na at may budget na {budget}.',
       'email_app_err': 'Walang nahanap na email app o hindi mabuksan.',
       'email_open_err': 'May error sa pagbubukas ng email app: ',
-      'edit_wallet_title': 'I-edit Budget: {name}',
-      'new_budget_lbl': 'Bagong Budget Amount',
+      'edit_wallet_title': 'I-edit Pangalan: {name}',
+      'new_budget_lbl': 'Bagong Pangalan ng Wallet',
       'add_fund_title': 'Magdagdag Pondo: {name}',
       'current_budget_lbl': 'Kasalukuyang Budget: ',
       'add_fund_lbl': 'Magkano ang idadagdag?',
@@ -873,7 +873,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       'btn_delete': 'I-DELETE',
       'no_wallet_found': 'Walang nahanap na wallet.',
       'add_fund_tooltip': 'Magdagdag Pondo',
-      'edit_wallet_tooltip': 'Edit Budget',
+      'edit_wallet_tooltip': 'I-edit ang Pangalan',
       'del_wallet_tooltip': 'Delete Wallet',
       'create_wallet_title': 'Gumawa ng Bagong Wallet',
       'wallet_name_lbl': 'Pangalan ng Wallet (e.g. Sweldo)',
@@ -1018,7 +1018,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           break;
         }
       }
-      List<List<dynamic>> csvRows = [
+      List<List> csvRows = [
         [
           _getTxt('csv_hdr_wallet'),
           _getTxt('csv_hdr_budget'),
@@ -1272,13 +1272,19 @@ class HomeScreenState extends State with WidgetsBindingObserver {
 
   Future _launchComplianceUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
+    try {
+// DIREKTANG i-launch nang hindi na ginagamitan ng canLaunchUrl check
+      await launchUrl(
+        url,
+        mode: LaunchMode.platformDefault,
+      );
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Hindi mabuksan ang link sa cellphone.')),
+          SnackBar(
+            content: Text('Hindi mabuksan ang link: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -1332,22 +1338,24 @@ class HomeScreenState extends State with WidgetsBindingObserver {
 
   void _showEditWalletBudgetDialog(
       AppWallet wallet, StateSetter setModalState) {
-    final budgetCtrl = TextEditingController(text: fmt(wallet.budget));
+    final nameCtrl = TextEditingController(text: wallet.name);
     showDialog(
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         title: Text(
-            _getTxt('edit_wallet_title').replaceAll('{name}', wallet.name)),
+          _currentLocale == 'tl'
+              ? 'I-edit Pangalan: ${wallet.name}'
+              : 'Edit Name: ${wallet.name}',
+        ),
         content: TextField(
-          controller: budgetCtrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            CommaFormatter()
-          ],
+          controller: nameCtrl,
+          keyboardType: TextInputType.text,
+          textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-              prefixText: '₱ ', labelText: _getTxt('new_budget_lbl')),
+              labelText: _currentLocale == 'tl'
+                  ? 'Bagong Pangalan ng Wallet'
+                  : 'New Wallet Name'),
         ),
         actions: [
           TextButton(
@@ -1357,15 +1365,9 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           ),
           TextButton(
             onPressed: () {
-              if (budgetCtrl.text.isNotEmpty) {
-                double newBudget =
-                    double.tryParse(budgetCtrl.text.replaceAll(',', '')) ??
-                        wallet.budget;
+              if (nameCtrl.text.trim().isNotEmpty) {
                 setState(() {
-                  wallet.budget = newBudget;
-                  if (wallet.id == activeWalletId) {
-                    budget = newBudget;
-                  }
+                  wallet.name = nameCtrl.text.trim();
                   saveData();
                 });
                 setModalState(() {});
@@ -1517,6 +1519,8 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       builder: (BuildContext context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
+          titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1524,7 +1528,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                 children: [
                   const Icon(Icons.account_balance_wallet,
                       color: Color(0xFFFFD700)),
-                  const SExpandingLabel(width: 8),
+                  const SizedBox(width: 10),
                   Text(_getTxt('wallet_manager'),
                       style: const TextStyle(fontSize: 16)),
                 ],
@@ -1536,83 +1540,115 @@ class HomeScreenState extends State with WidgetsBindingObserver {
             ],
           ),
           content: SizedBox(
-            width: double.maxFinite,
+            width: MediaQuery.of(context).size.width * 0.9,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
+                Flexible(
                   child: wallets.isEmpty
-                      ? Center(child: Text(_getTxt('no_wallet_found')))
+                      ? Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child:
+                              Center(child: Text(_getTxt('no_wallet_found'))),
+                        )
                       : ListView.builder(
                           shrinkWrap: true,
                           itemCount: wallets.length,
                           itemBuilder: (context, idx) {
                             final w = wallets[idx];
                             final isSelected = w.id == activeWalletId;
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 4, vertical: 0),
-                              leading: Icon(Icons.wallet,
-                                  color: isSelected
-                                      ? const Color(0xFFFFD700)
-                                      : Colors.white30),
-                              title: Text(w.name,
+                            return Card(
+                              color: isSelected
+                                  ? const Color(0xFF252525)
+                                  : Colors.transparent,
+                              elevation: 0,
+                              margin: const EdgeInsets.symmetric(vertical: 2),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                leading: Icon(Icons.wallet,
+                                    color: isSelected
+                                        ? const Color(0xFFFFD700)
+                                        : Colors.white30),
+                                title: Text(
+                                  w.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       color: isSelected
                                           ? const Color(0xFFFFD700)
                                           : Colors.white,
                                       fontWeight: isSelected
                                           ? FontWeight.bold
-                                          : FontWeight.normal)),
-                              subtitle: Text('Budget: ${peso(w.budget)}',
-                                  style: const TextStyle(fontSize: 11)),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.add,
-                                        color: Color(0xFFFFD700), size: 18),
-                                    tooltip: _getTxt('add_fund_tooltip'),
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      _showAddAmountToWalletDialog(w);
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.white38, size: 18),
-                                    tooltip: _getTxt('edit_wallet_tooltip'),
-                                    onPressed: () =>
-                                        _showEditWalletBudgetDialog(
-                                            w, setModalState),
-                                  ),
-                                  if (w.id != "default")
+                                          : FontWeight.normal),
+                                ),
+                                subtitle: Text(
+                                  'Budget: ${peso(w.budget)}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.white54),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                     IconButton(
-                                      icon: const Icon(Icons.delete_outline,
-                                          color: Colors.redAccent, size: 18),
-                                      tooltip: _getTxt('del_wallet_tooltip'),
+                                      icon: const Icon(Icons.add,
+                                          color: Color(0xFFFFD700), size: 18),
+                                      tooltip: _getTxt('add_fund_tooltip'),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _showAddAmountToWalletDialog(w);
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit,
+                                          color: Colors.white38, size: 18),
+                                      tooltip: _currentLocale == 'tl'
+                                          ? 'I-edit ang Pangalan'
+                                          : 'Edit Name',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
                                       onPressed: () =>
-                                          _showDeleteWalletConfirmDialog(
+                                          _showEditWalletBudgetDialog(
                                               w, setModalState),
                                     ),
-                                  if (isSelected)
-                                    const Icon(Icons.check_circle,
-                                        color: Color(0xFF00E676), size: 18),
-                                ],
+                                    if (w.id != "default") ...[
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline,
+                                            color: Colors.redAccent, size: 18),
+                                        tooltip: _getTxt('del_wallet_tooltip'),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () =>
+                                            _showDeleteWalletConfirmDialog(
+                                                w, setModalState),
+                                      ),
+                                    ],
+                                    if (isSelected) ...[
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.check_circle,
+                                          color: Color(0xFF00E676), size: 18),
+                                    ],
+                                  ],
+                                ),
+                                onTap: () {
+                                  setModalState(() {
+                                    activeWalletId = w.id;
+                                  });
+                                  Navigator.pop(context);
+                                  _switchWallet(w.id);
+                                },
                               ),
-                              onTap: () {
-                                setModalState(() {
-                                  activeWalletId = w.id;
-                                });
-                                Navigator.pop(context);
-                                _switchWallet(w.id);
-                              },
                             );
                           },
                         ),
                 ),
                 const Divider(color: Colors.white10),
-                ButtonTheme(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12, top: 4),
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
@@ -1624,6 +1660,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
                       backgroundColor:
                           const Color(0xFFFFD700).withValues(alpha: 0.15),
                       foregroundColor: const Color(0xFFFFD700),
+                      minimumSize: const Size(double.infinity, 45),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
@@ -2314,7 +2351,7 @@ class HomeScreenState extends State with WidgetsBindingObserver {
   Widget _buildSummaryCardDateFilters() {
     String customBtnLabel = _selectedDateRange == null
         ? (_currentLocale == 'tl' ? "Pumili ng Range" : "Pick Range")
-        : "\({DateFormat('MM/dd').format(_selectedDateRange!.start)} -\){DateFormat('MM/dd').format(_selectedDateRange!.end)}";
+        : "(\({DateFormat('MM/dd').format(_selectedDateRange!.start)} -\){DateFormat('MM/dd').format(_selectedDateRange!.end)})";
     final bool canInteract = !(_isTrialExpired && !_isPremiumUser);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -2567,152 +2604,168 @@ class HomeScreenState extends State with WidgetsBindingObserver {
           color: const Color(0xFF121212),
           child: Column(
             children: [
-              DrawerHeader(
-                decoration: const BoxDecoration(color: Color(0xFF1E1E1E)),
-                child: Row(
-                  children: [
-                    Image.asset('assets/icon.png',
-                        width: 60,
-                        height: 60,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.calculate,
-                                color: Color(0xFFFFD700), size: 60)),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              // Ginawang scrollable ang buong listahan ng menu para kahit humaba ang Contact Us ay hindi mag-ooverflow
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      DrawerHeader(
+                        decoration:
+                            const BoxDecoration(color: Color(0xFF1E1E1E)),
+                        child: Row(
+                          children: [
+                            Image.asset('assets/icon.png',
+                                width: 60,
+                                height: 60,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.calculate,
+                                        color: Color(0xFFFFD700), size: 60)),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('GASTOS KO',
+                                      style: TextStyle(
+                                          color: Color(0xFFFFD700),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                      _isPremiumUser
+                                          ? "Pro Active ($_purchasedPlanTitle)"
+                                          : (trialExpiredWithNoPremium
+                                              ? 'Trial Expired'
+                                              : "Free Trial ($_trialDaysLeft days left)"),
+                                      style: TextStyle(
+                                          color: trialExpiredWithNoPremium
+                                              ? Colors.redAccent
+                                              : Colors.white38,
+                                          fontSize: 10)),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.language,
+                            color: Color(0xFFFFD700)),
+                        title: Text(_getTxt('lang_lbl'),
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                            _currentLocale == 'en' ? 'English' : 'Tagalog',
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.white38)),
+                        trailing: DropdownButton(
+                          value: _currentLocale,
+                          dropdownColor: const Color(0xFF1E1E1E),
+                          underline: const SizedBox(),
+                          onChanged: (String? newLocale) {
+                            if (newLocale != null) {
+                              setState(() {
+                                _currentLocale = newLocale;
+                                saveData();
+                              });
+                            }
+                          },
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'en',
+                                child: Text('English',
+                                    style: TextStyle(fontSize: 13))),
+                            DropdownMenuItem(
+                                value: 'tl',
+                                child: Text('Tagalog',
+                                    style: TextStyle(fontSize: 13))),
+                          ],
+                        ),
+                      ),
+                      const Divider(color: Colors.white10),
+                      if (!_isPremiumUser) ...[
+                        ListTile(
+                          leading: const Icon(Icons.star_rounded,
+                              color: Color(0xFFFFD700)),
+                          title: Text(
+                            _getTxt('upgrade_title'),
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFFD700)),
+                          ),
+                          subtitle: Text(
+                            _getTxt('upgrade_subtitle'),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.white38),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showUpgradeOptionsBottomSheet();
+                          },
+                        ),
+                      ],
+                      ListTile(
+                        leading: const Icon(Icons.privacy_tip,
+                            color: Color(0xFF00E676)),
+                        title: const Text('Privacy Policy',
+                            style: TextStyle(fontSize: 14)),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _launchComplianceUrl(
+                              'https://docs.google.com/document/d/e/2PACX-1vTjonFfWFs9UiUqNne5Ro0c2ab2UhR1mnwe0E1BBl68qrK5gdaqWc9STAAvTAapBSve_7AuS8-rNNpx/pub');
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.description,
+                            color: Color(0xFF29B6F6)),
+                        title: const Text('Terms of Use (EULA)',
+                            style: TextStyle(fontSize: 14)),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _launchComplianceUrl(
+                              'https://docs.google.com/document/d/e/2PACX-1vS4ekakFeVHrKq98abpasJFDV9tdEQGFWf9USDoSOADmlY859l75tURqA5qPrcbFwEKfMPb-Bg-hLpL/pub');
+                        },
+                      ),
+                      ExpansionTile(
+                        leading: const Icon(Icons.mail_outline,
+                            color: Color(0xFFFFD700)),
+                        title: const Text('Contact Us',
+                            style: TextStyle(fontSize: 14)),
+                        iconColor: const Color(0xFFFFD700),
+                        collapsedIconColor: Colors.white54,
                         children: [
-                          const Text('GASTOS KO',
-                              style: TextStyle(
-                                  color: Color(0xFFFFD700),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16)),
-                          const SizedBox(height: 2),
-                          Text(
-                              _isPremiumUser
-                                  ? "Pro Active ($_purchasedPlanTitle)"
-                                  : (trialExpiredWithNoPremium
-                                      ? 'Trial Expired'
-                                      : "Free Trial ($_trialDaysLeft days left)"),
-                              style: TextStyle(
-                                  color: trialExpiredWithNoPremium
-                                      ? Colors.redAccent
-                                      : Colors.white38,
-                                  fontSize: 10)),
+                          ListTile(
+                            contentPadding: const EdgeInsets.only(left: 32),
+                            leading: const Icon(Icons.bug_report,
+                                color: Colors.redAccent, size: 20),
+                            title: const Text('Report a Bug or Problem',
+                                style: TextStyle(fontSize: 13)),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _sendSupportEmail('GASTOS KO - Bug Report');
+                            },
+                          ),
+                          ListTile(
+                            contentPadding: const EdgeInsets.only(left: 32),
+                            leading: const Icon(Icons.lightbulb_outline,
+                                color: Colors.amber, size: 20),
+                            title: const Text('Send Suggestion',
+                                style: TextStyle(fontSize: 13)),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _sendSupportEmail('GASTOS KO - App Suggestion');
+                            },
+                          ),
                         ],
                       ),
-                    )
-                  ],
+                    ],
+                  ),
                 ),
               ),
-              ListTile(
-                leading: const Icon(Icons.language, color: Color(0xFFFFD700)),
-                title: Text(_getTxt('lang_lbl'),
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold)),
-                subtitle: Text(_currentLocale == 'en' ? 'English' : 'Tagalog',
-                    style:
-                        const TextStyle(fontSize: 11, color: Colors.white38)),
-                trailing: DropdownButton(
-                  value: _currentLocale,
-                  dropdownColor: const Color(0xFF1E1E1E),
-                  underline: const SizedBox(),
-                  onChanged: (String? newLocale) {
-                    if (newLocale != null) {
-                      setState(() {
-                        _currentLocale = newLocale;
-                        saveData();
-                      });
-                    }
-                  },
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'en',
-                        child: Text('English', style: TextStyle(fontSize: 13))),
-                    DropdownMenuItem(
-                        value: 'tl',
-                        child: Text('Tagalog', style: TextStyle(fontSize: 13))),
-                  ],
-                ),
-              ),
-              const Divider(color: Colors.white10),
-              if (!_isPremiumUser) ...[
-                ListTile(
-                  leading:
-                      const Icon(Icons.star_rounded, color: Color(0xFFFFD700)),
-                  title: Text(
-                    _getTxt('upgrade_title'),
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFFD700)),
-                  ),
-                  subtitle: Text(
-                    _getTxt('upgrade_subtitle'),
-                    style: const TextStyle(fontSize: 10, color: Colors.white38),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showUpgradeOptionsBottomSheet();
-                  },
-                ),
-              ],
-              ListTile(
-                leading:
-                    const Icon(Icons.privacy_tip, color: Color(0xFF00E676)),
-                title: const Text('Privacy Policy',
-                    style: TextStyle(fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _launchComplianceUrl(
-                      'https://docs.google.com/document/d/e/2PACX-1vTjonFfWFs9UiUqNne5Ro0c2ab2UhR1mnwe0E1BBl68qrK5gdaqWc9STAAvTAapBSve_7AuS8-rNNpx/pub');
-                },
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.description, color: Color(0xFF29B6F6)),
-                title: const Text('Terms of Use (EULA)',
-                    style: TextStyle(fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _launchComplianceUrl(
-                      'https://docs.google.com/document/d/e/2PACX-1vS4ekakFeVHrKq98abpasJFDV9tdEQGFWf9USDoSOADmlY859l75tURqA5qPrcbFwEKfMPb-Bg-hLpL/pub');
-                },
-              ),
-              ExpansionTile(
-                leading:
-                    const Icon(Icons.mail_outline, color: Color(0xFFFFD700)),
-                title: const Text('Contact Us', style: TextStyle(fontSize: 14)),
-                iconColor: const Color(0xFFFFD700),
-                collapsedIconColor: Colors.white54,
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.only(left: 32),
-                    leading: const Icon(Icons.bug_report,
-                        color: Colors.redAccent, size: 20),
-                    title: const Text('Report a Bug or Problem',
-                        style: TextStyle(fontSize: 13)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _sendSupportEmail('GASTOS KO - Bug Report');
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: const EdgeInsets.only(left: 32),
-                    leading: const Icon(Icons.lightbulb_outline,
-                        color: Colors.amber, size: 20),
-                    title: const Text('Send Suggestion',
-                        style: TextStyle(fontSize: 13)),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _sendSupportEmail('GASTOS KO - App Suggestion');
-                    },
-                  ),
-                ],
-              ),
-              const Divider(color: Colors.white10),
-              const Spacer(),
+              // Ang Reset section ay mananatili sa pinaka-ibaba nang ligtas nang walang Spacer()
               const Divider(color: Colors.white10),
               ListTile(
                 leading:
@@ -3068,11 +3121,4 @@ class HomeScreenState extends State with WidgetsBindingObserver {
       }),
     );
   }
-}
-
-class SExpandingLabel extends StatelessWidget {
-  final double width;
-  const SExpandingLabel({super.key, required this.width});
-  @override
-  Widget build(BuildContext context) => SizedBox(width: width);
 }

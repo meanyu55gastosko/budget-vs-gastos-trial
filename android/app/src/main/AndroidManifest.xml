@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- REQUIRED: Kailangan ito para makakonekta sa internet ang app at mabuksan ang mga link -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Pinagsamang Queries para sa Text Processing, Web Links, at Email Support -->
     <queries>
         <!-- Para sa standard Flutter Text Selection/Processing Engine -->
@@ -25,7 +28,9 @@
     <application
         android:label="gastosko"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"> <!-- Pinapayagan ang external link invocation nang ligtas -->
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
